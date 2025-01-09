@@ -8,6 +8,7 @@ import seaborn as sns
 from helper import (
     compute_correlations,
     create_time_split,
+    get_performance_metrics,
     load_and_analyze_csv,
     get_available_csvs, 
     get_feature_engineering_options,
@@ -17,6 +18,8 @@ from helper import (
     train_model
 )
 from plotter import  plot_confusion_matrix, plot_feature_importances, plot_roc_curve
+from model_functions.decision_tree import  auto_tune_decision_tree
+from model_functions.random_forest import auto_tune_random_forest
 
 def main():
     
@@ -319,27 +322,6 @@ def main():
     # Get selected features for next steps
     selected_features = st.session_state['selected_features']
 
-    # Now you can use selected_features in subsequent steps
-    if st.button("Proceed to Model Training", key="proceed_to_model_btn"):
-        # Create train/test split using selected features
-        X_train, X_test, X_val, y_train, y_test, y_val = create_time_split(
-            df, 
-            target_col=target_col,
-            selected_features=selected_features,  # Now this will be defined
-            test_split_date=test_split_date,
-            val_split_date=val_split_date if include_validation else None
-        )
-        
-        # Store splits in session state
-        st.session_state.update({
-            'X_train': X_train,
-            'X_test': X_test,
-            'X_val': X_val,
-            'y_train': y_train,
-            'y_test': y_test,
-            'y_val': y_val
-        })
-
     #spacer for the next section
     st.write("\n\n")
     st.write("--------------------------------")
@@ -535,27 +517,67 @@ def main():
             val_samples = len(df[val_mask])
             st.metric("Validation Samples", f"{val_samples:,}")
     
-    # Store split data in session state
-    if include_validation:
-        X_train, X_test, X_val, y_train, y_test, y_val = create_time_split_with_validation(
-            df, target_col='Y', selected_features=selected_features,
-            test_split_date=test_split_date, val_split_date=val_split_date
-        )
-        st.session_state['X_val'] = X_val
-        st.session_state['y_val'] = y_val
-    else:
-        X_train, X_test, y_train, y_test = create_time_split(
-            df, target_col='Y', selected_features=selected_features,
-            split_date=test_split_date
-        )
     
-    st.session_state.update({
-        'X_train': X_train,
-        'X_test': X_test,
-        'y_train': y_train,
-        'y_test': y_test,
-        'include_validation': include_validation
-    })
+    # Add button to update session state with split data
+    if st.button("Apply Data Split", help="Click to update the training, testing, and validation sets"):
+        with st.spinner("Updating data splits..."):
+            # Debug prints for date ranges
+            st.write("### Date Ranges for Splits:")
+            st.write(f"Training dates: {df[train_mask]['Data'].min()} to {df[train_mask]['Data'].max()}")
+            st.write(f"Testing dates: {df[test_mask]['Data'].min()} to {df[test_mask]['Data'].max()}")
+            if include_validation:
+                st.write(f"Validation dates: {df[val_mask]['Data'].min()} to {df[val_mask]['Data'].max()}")
+            
+            # Store split data in session state
+            if include_validation:
+                X_train, X_test, X_val, y_train, y_test, y_val = create_time_split_with_validation(
+                    df, 
+                    target_col=target_col,  # Make sure to use the selected target_col
+                    selected_features=selected_features,
+                    test_split_date=test_split_date, 
+                    val_split_date=val_split_date
+                )
+                
+                # Additional debug info about shapes
+                st.write("### Data Shapes:")
+                st.write(f"X_train shape: {X_train.shape}")
+                st.write(f"X_test shape: {X_test.shape}")
+                st.write(f"X_val shape: {X_val.shape}")
+                
+                st.session_state.update({
+                    'X_train': X_train,
+                    'X_test': X_test,
+                    'X_val': X_val,
+                    'y_train': y_train,
+                    'y_test': y_test,
+                    'y_val': y_val,
+                    'include_validation': include_validation,
+                    'data_split_applied': True
+                })
+            else:
+                X_train, X_test, y_train, y_test = create_time_split(
+                    df, 
+                    target_col=target_col,  # Make sure to use the selected target_col
+                    selected_features=selected_features,
+                    split_date=test_split_date
+                )
+                
+                # Additional debug info about shapes
+                st.write("### Data Shapes:")
+                st.write(f"X_train shape: {X_train.shape}")
+                st.write(f"X_test shape: {X_test.shape}")
+                
+                st.session_state.update({
+                    'X_train': X_train,
+                    'X_test': X_test,
+                    'y_train': y_train,
+                    'y_test': y_test,
+                    'include_validation': include_validation,
+                    'data_split_applied': True
+                })
+            st.success("Data split updated successfully!")
+
+
     
     
     #spacer for the next section
@@ -566,117 +588,8 @@ def main():
     st.subheader("5. Model Training & Evaluation")
 
     # Create tabs for model info and training
-    model_tab, training_tab = st.tabs(["Model Information", "Model Training"])
+    training_tab, model_tab = st.tabs(["Model Training", "Model(s) Information"])
 
-    with model_tab:
-        # Model information section
-        st.markdown("### Available Models")
-        
-        # Display model cards in a grid
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### Tree-based Models")
-            with st.expander("Decision Tree"):
-                st.markdown("""
-                    **Description**: Simple tree-based method that splits data on feature values.
-                    
-                    **Strengths**:
-                    - Highly interpretable
-                    - Handles non-linear relationships
-                    - No feature scaling needed
-                    
-                    **Key Parameters**:
-                    - max_depth
-                    - min_samples_split
-                    
-                    **Best For**: Small to medium datasets, when interpretability is crucial
-                """)
-            
-            with st.expander("Random Forest"):
-                st.markdown("""
-                    **Description**: Ensemble of Decision Trees using bagging.
-                    
-                    **Strengths**:
-                    - Better generalization than single trees
-                    - Robust to overfitting
-                    - Feature importance rankings
-                    
-                    **Key Parameters**:
-                    - n_estimators
-                    - max_depth
-                    - min_samples_split
-                    
-                    **Best For**: General-purpose classification, handling complex relationships
-                """)
-            
-            with st.expander("Gradient Boosting"):
-                st.markdown("""
-                    **Description**: Sequential ensemble method that corrects previous errors.
-                    
-                    **Frameworks**:
-                    - XGBoost
-                    - LightGBM
-                    - CatBoost
-                    
-                    **Key Parameters**:
-                    - learning_rate
-                    - n_estimators
-                    - max_depth
-                    
-                    **Best For**: When you need state-of-the-art performance on structured data
-                """)
-
-        with col2:
-            st.markdown("#### Other Models")
-            with st.expander("Logistic Regression"):
-                st.markdown("""
-                    **Description**: Linear model for classification.
-                    
-                    **Strengths**:
-                    - Simple and interpretable
-                    - Fast training
-                    - Good baseline
-                    
-                    **Key Parameters**:
-                    - C (regularization)
-                    - solver
-                    - max_iter
-                    
-                    **Best For**: Linear problems, baseline model
-                """)
-            
-            with st.expander("Support Vector Machine"):
-                st.markdown("""
-                    **Description**: Finds optimal hyperplane for classification.
-                    
-                    **Strengths**:
-                    - Effective in high-dimensional spaces
-                    - Versatile through different kernels
-                    
-                    **Key Parameters**:
-                    - kernel
-                    - C
-                    - gamma
-                    
-                    **Best For**: Medium-sized datasets, complex decision boundaries
-                """)
-            
-            with st.expander("Neural Networks (LSTM/TCN)"):
-                st.markdown("""
-                    **Description**: Deep learning models for sequential data.
-                    
-                    **Types**:
-                    - LSTM: Long Short-Term Memory
-                    - TCN: Temporal Convolutional Network
-                    
-                    **Key Parameters**:
-                    - layers/units
-                    - sequence length
-                    - learning rate
-                    
-                    **Best For**: Large datasets with temporal patterns
-                """)
     with training_tab:
         # Model selection and training section
         st.markdown("### Model Configuration")
@@ -684,9 +597,25 @@ def main():
         # Add unique keys to all sliders
         model_type = st.selectbox(
             "Model Type", 
-            ["decision_tree", "random_forest", "gradient_boost", "logistic_regression", "lstm", "svm", "tcn"],
-            key="model_type_select"
+            [
+                "decision_tree",
+                "random_forest", 
+                "gradient_boost", 
+                "logistic_regression",
+                "lstm (BETA) ⚠️",  # Added BETA label and warning emoji
+                "svm (BETA) ⚠️",
+                "tcn (BETA) ⚠️"
+            ],
+            key="model_type_select",
+            help="Models marked with (BETA) ⚠️ are experimental and may contain bugs"
         )
+        
+        # Clean the model type string if needed for processing
+        model_type = model_type.split(" ")[0] if "(BETA)" in model_type else model_type
+
+        # Show warning if beta model is selected
+        if "(BETA)" in model_type:
+            st.warning("⚠️ You've selected a model that's currently in beta. It may be unstable or contain bugs.")
 
         # Add logistic regression specific parameters
         if model_type == "logistic_regression":
@@ -712,23 +641,44 @@ def main():
             }
 
         if model_type == "decision_tree":
-            max_depth_dt = st.slider("max_depth", 1, 20, 5, 1, key="dt_depth")
-            min_samples_split_dt = st.slider("min_samples_split", 2, 20, 5, 1, key="dt_split")
-            model_params = {
-                'max_depth': max_depth_dt,
-                'min_samples_split': min_samples_split_dt
-            }
+            
+            # Add auto-tune checkbox
+            use_auto_tune = st.checkbox("Use Auto-Tuning", 
+                help="Automatically try different combinations of parameters to find the best model")
+            
+            if not use_auto_tune:
+                # Original manual parameter selection
+                max_depth_dt = st.slider("max_depth", 1, 20, 5, 1, key="dt_depth")
+                min_samples_split_dt = st.slider("min_samples_split", 2, 20, 5, 1, key="dt_split")
+                model_params = {
+                    'max_depth': max_depth_dt,
+                    'min_samples_split': min_samples_split_dt
+                }
+            else:
+                st.info("Auto-tuning will try multiple parameter combinations to find the best model. "
+                       "This may take a few minutes.")
+                model_params = {'auto_tune': True}
+            
         elif model_type == "random_forest":
-            n_estimators_rf = st.slider("n_estimators", 10, 300, 100, 10, key="rf_estimators")
-            max_depth_rf = st.slider("max_depth", 1, 20, 10, 1, key="rf_depth")
-            model_params = {
-                'n_estimators': n_estimators_rf,
-                'max_depth': max_depth_rf,
-            }
+            # Add auto-tune checkbox
+            use_auto_tune_rf = st.checkbox("Use Auto-Tuning", 
+                help="Automatically try different combinations of parameters to find the best model")
+            
+            if not use_auto_tune_rf:
+                # Original manual parameter selection
+                n_estimators_rf = st.slider("n_estimators", 10, 300, 100, 10, key="rf_estimators")
+                max_depth_rf = st.slider("max_depth", 1, 20, 10, 1, key="rf_depth")
+                min_samples_split_rf = st.slider("min_samples_split", 2, 20, 5, 1, key="rf_split")
+                model_params = {
+                    'n_estimators': n_estimators_rf,
+                    'max_depth': max_depth_rf,
+                    'min_samples_split': min_samples_split_rf
+                }
+            else:
+                st.info("Auto-tuning will try multiple parameter combinations to find the best model. "
+                         "This may take a few minutes.")
+                model_params = {'auto_tune': True}
 
-        if model_type == "random_forest":
-            min_samples_split_rf = st.slider("min_samples_split", 2, 20, 5, 1, key="rf_split")
-            model_params['min_samples_split'] = min_samples_split_rf
         elif model_type == "gradient_boost":
             # First select the framework
             framework = st.selectbox(
@@ -1066,11 +1016,51 @@ def main():
 
         # Add some spacing
         st.write("")
+        
+        
 
         if st.button("Train & Evaluate Model", key="train_model_btn"):
+            
+            if 'data_split_applied' not in st.session_state:
+                st.error("Please apply data split first before training the model.")
+                st.stop()
+                
+            # Get the split data from session state
+            X_train = st.session_state['X_train']
+            X_test = st.session_state['X_test']
+            y_train = st.session_state['y_train']
+            y_test = st.session_state['y_test']
+            X_val = st.session_state.get('X_val')  # Use get() to handle cases without validation
+            y_val = st.session_state.get('y_val')
+        
             with st.spinner('Training model...'):
-                # Train model with validation set if included
-                if include_validation:
+                
+                if model_type == "decision_tree":
+                    if model_params.get('auto_tune'):
+                        model_results = train_and_evaluate_decision_tree(X_train, y_train, X_test, y_test, X_val, y_val, model_params)
+                    else:
+                        model_results = train_model(
+                            X_train, y_train,
+                            X_test, y_test,
+                            X_val, y_val,
+                            model_type=model_type,
+                            **model_params
+                        )
+                
+                elif model_type == "random_forest":
+                    if model_params.get('auto_tune'):
+                        model_results = train_and_evaluate_random_forest(X_train, y_train, X_test, y_test, X_val, y_val, model_params)
+                    else:
+                        model_results = train_model(
+                            X_train, y_train,
+                            X_test, y_test,
+                            X_val, y_val,
+                            model_type=model_type,
+                            **model_params
+                        )
+                    
+                else:
+                    # Original training code
                     model_results = train_model(
                         X_train, y_train,
                         X_test, y_test,
@@ -1078,14 +1068,7 @@ def main():
                         model_type=model_type,
                         **model_params
                     )
-                else:
-                    model_results = train_model(
-                        X_train, y_train,
-                        X_test, y_test,
-                        model_type=model_type,
-                        **model_params
-                    )
-                
+                    
                 # Create main layout columns
                 metrics_col, plots_col = st.columns([1, 2])
                 
@@ -1177,9 +1160,232 @@ def main():
                 
                 st.success('Model training complete!')
                 
-                #pring the final list of session keys
-                st.write(st.session_state.keys())
+                #save session keys as a json file using a save button
+                if st.button("Save Session Keys", key="save_session_keys_btn"):
+                    #pring the final list of session keys
+                    st.write(st.session_state.keys())
+                    #save the session keys as a json file
+                    with open('session_keys.json', 'w') as f:
+                        json.dump(st.session_state.keys(), f)
     
+    with model_tab:
+        # Model information section
+        st.markdown("### Available Models")
+        
+        # Display model cards in a grid
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### Tree-based Models")
+            with st.expander("Decision Tree"):
+                st.markdown("""
+                    **Description**: Simple tree-based method that splits data on feature values.
+                    
+                    **Strengths**:
+                    - Highly interpretable
+                    - Handles non-linear relationships
+                    - No feature scaling needed
+                    
+                    **Key Parameters**:
+                    - max_depth
+                    - min_samples_split
+                     
+                    **Feature Engineering Compatibility**:
+                    - Rolling features: Good - can capture temporal patterns
+                    - Lagging features: Good - can learn from historical values
+                    - Best with moderate feature sets to maintain interpretability
+                    
+                    **Best For**: Small to medium datasets, when interpretability is crucial
+                """)
+            
+            with st.expander("Random Forest"):
+                st.markdown("""
+                    **Description**: Ensemble of Decision Trees using bagging.
+                    
+                    **Strengths**:
+                    - Better generalization than single trees
+                    - Robust to overfitting
+                    - Feature importance rankings
+                    
+                    **Key Parameters**:
+                    - n_estimators
+                    - max_depth
+                    - min_samples_split
+                    
+                    **Feature Engineering Compatibility**:
+                    - Rolling features: Excellent - can handle large feature sets
+                    - Lagging features: Excellent - effectively combines historical patterns
+                    - Can handle high-dimensional feature spaces well
+                    
+                    **Best For**: General-purpose classification, handling complex relationships
+                """)
+            
+            with st.expander("Gradient Boosting"):
+                st.markdown("""
+                    **Description**: Sequential ensemble method that corrects previous errors.
+                    
+                    **Frameworks**:
+                    - XGBoost
+                    - LightGBM
+                    - CatBoost
+                    
+                    **Key Parameters**:
+                    - learning_rate
+                    - n_estimators
+                    - max_depth
+                    
+                    **Feature Engineering Compatibility**:
+                    - Rolling features: Excellent - particularly good with statistical aggregations
+                    - Lagging features: Excellent - can capture complex temporal dependencies
+                    - Handles high-dimensional feature spaces efficiently
+                    
+                    **Best For**: When you need state-of-the-art performance on structured data
+                """)
+
+        with col2:
+            st.markdown("#### Other Models")
+            with st.expander("Logistic Regression"):
+                st.markdown("""
+                    **Description**: Linear model for classification.
+                    
+                    **Strengths**:
+                    - Simple and interpretable
+                    - Fast training
+                    - Good baseline
+                    
+                    **Key Parameters**:
+                    - C (regularization)
+                    - solver
+                    - max_iter
+                    
+                    **Feature Engineering Compatibility**:
+                    - Rolling features: Limited - best with simple statistical aggregations
+                    - Lagging features: Moderate - can use basic time-shifted features
+                    - Feature selection important to prevent multicollinearity
+                    
+                    **Best For**: Linear problems, baseline model
+                """)
+            
+            with st.expander("Support Vector Machine"):
+                st.markdown("""
+                    **Description**: Finds optimal hyperplane for classification.
+                    
+                    **Strengths**:
+                    - Effective in high-dimensional spaces
+                    - Versatile through different kernels
+                    
+                    **Key Parameters**:
+                    - kernel
+                    - C
+                    - gamma
+                    
+                    **Feature Engineering Compatibility**:
+                    - Rolling features: Good - especially with RBF kernel
+                    - Lagging features: Good - but requires careful feature scaling
+                    - Feature selection recommended for computational efficiency
+                            
+                    **Best For**: Medium-sized datasets, complex decision boundaries
+                """)
+            
+            with st.expander("Neural Networks (LSTM/TCN)"):
+                st.markdown("""
+                    **Description**: Deep learning models for sequential data.
+                    
+                    **Types**:
+                    - LSTM: Long Short-Term Memory
+                    - TCN: Temporal Convolutional Network
+                    
+                    **Key Parameters**:
+                    - layers/units
+                    - sequence length
+                    - learning rate
+                    
+                    **Feature Engineering Compatibility**:
+                    - Rolling features: Optional - models can learn temporal patterns internally
+                    - Lagging features: Usually unnecessary - built-in sequence handling
+                    - Best with minimal feature engineering, raw sequential data
+                    
+                    **Best For**: Large datasets with temporal patterns
+                """)
+
+
+def train_and_evaluate_decision_tree(X_train, y_train, X_test, y_test, X_val, y_val, model_params):
+    """Train and evaluate the Decision Tree model."""
+    progress_text = st.empty()
+    progress_text.text("Auto-tuning in progress... This may take a few minutes.")
+    
+    # Get top models from auto-tuning
+    top_models = auto_tune_decision_tree(
+        X_train, y_train,
+        X_test, y_test,
+        X_val=X_val, y_val=y_val
+    )
+    
+    # Display top models in an expander
+    with st.expander("Top 5 Models from Auto-Tuning"):
+        for i, result in enumerate(top_models, 1):
+            st.markdown(f"**Model {i}**")
+            st.write(f"Parameters: {result['params']}")
+            st.write(f"Overall Score: {result['overall_score']:.4f}")
+            st.write("Metrics:", result['metrics'])
+            st.write("---")
+    
+    # Use the best model's results for visualization
+    model_results = top_models[0]['model_results']
+    
+    test_metrics = get_performance_metrics(y_test, model_results['test_predictions'])
+    test_metrics['CV Score Mean'] = model_results['cv_scores'].mean()
+    test_metrics['CV Score Std'] = model_results['cv_scores'].std()
+    
+    val_metrics = None
+    if X_val is not None and y_val is not None and model_results['val_predictions'] is not None:
+        val_metrics = get_performance_metrics(y_val, model_results['val_predictions'])
+    
+    model_results['test_metrics'] = test_metrics
+    model_results['val_metrics'] = val_metrics
+    
+    progress_text.empty()    
+    
+    return model_results
+
+def train_and_evaluate_random_forest(X_train, y_train, X_test, y_test, X_val, y_val, model_params):
+    """Train and evaluate the Random Forest model."""
+    progress_text = st.empty()
+    progress_text.text("Auto-tuning in progress... This may take a few minutes.")
+    
+    # Get top models from auto-tuning
+    top_models = auto_tune_random_forest(
+        X_train, y_train,
+        X_test, y_test,
+        X_val=X_val, y_val=y_val
+    )
+    
+    # Display top models in an expander
+    with st.expander("Top 5 Models from Auto-Tuning"):
+        for i, result in enumerate(top_models, 1):
+            st.markdown(f"**Model {i}**")
+            st.write(f"Parameters: {result['params']}")
+            st.write(f"Overall Score: {result['overall_score']:.4f}")
+            st.write("Metrics:", result['metrics'])
+            st.write("---")
+    
+    # Use the best model's results for visualization
+    model_results = top_models[0]['model_results']
+    
+    test_metrics = get_performance_metrics(y_test, model_results['test_predictions'])
+    test_metrics['CV Score Mean'] = model_results['cv_scores'].mean()
+    test_metrics['CV Score Std'] = model_results['cv_scores'].std()
+    
+    val_metrics = None
+    if X_val is not None and y_val is not None and model_results['val_predictions'] is not None:
+        val_metrics = get_performance_metrics(y_val, model_results['val_predictions'])
+    
+    model_results['test_metrics'] = test_metrics
+    model_results['val_metrics'] = val_metrics
+    
+    progress_text.empty()
+    
+    return model_results
 
 
 if __name__ == "__main__":

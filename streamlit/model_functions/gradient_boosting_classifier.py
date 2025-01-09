@@ -4,15 +4,11 @@ from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 from sklearn.model_selection import cross_val_score
 import pandas as pd
+import numpy as np
 
-def train_gradient_boosting(X_train, y_train, X_test, X_val=None, y_val=None, **params):
+def train_gradient_boosting(X_train, y_train, X_test, y_test, X_val=None, y_val=None, **params):
     """
     Train a gradient boosting model using specified framework and return predictions and model details.
-    
-    Parameters:
-    -----------
-    framework: str
-        The gradient boosting framework to use ('sklearn', 'xgboost', 'lightgbm', 'catboost')
     """
     framework = params.pop('framework', 'sklearn')
     

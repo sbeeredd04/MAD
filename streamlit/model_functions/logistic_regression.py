@@ -2,7 +2,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
 import pandas as pd
 
-def train_logistic_regression(X_train, y_train, X_test, X_val=None, y_val=None, **params):
+def train_logistic_regression(X_train, y_train, X_test, y_test, X_val=None, y_val=None, **params):
     """
     Train a logistic regression model and return predictions and model details.
     """
