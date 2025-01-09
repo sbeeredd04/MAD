@@ -10,9 +10,6 @@ from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
     confusion_matrix,
-    classification_report,
-    roc_curve,
-    auc
 )
 import os
 from pathlib import Path
@@ -22,7 +19,11 @@ from model_functions.random_forest import train_random_forest
 from model_functions.gradient_boosting_classifier import train_gradient_boosting
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 from sklearn.inspection import permutation_importance
-
+from sklearn.linear_model import LogisticRegression
+from model_functions.logistic_regression import train_logistic_regression
+from model_functions.svm_classifier import train_svm
+from model_functions.lstm_classifier import train_lstm
+from model_functions.tcn_classifier import train_tcn
 
 
 def get_available_csvs(root_dir='../data'):
@@ -321,19 +322,31 @@ def get_performance_metrics(y_true, y_pred):
     return metrics
 
 def train_model(X_train, y_train, X_test, y_test, X_val=None, y_val=None, model_type='decision_tree', **params):
-
     # Select appropriate training function
-    if model_type == 'decision_tree':
-        model_results = train_decision_tree(X_train, y_train, X_test, X_val, y_val, **params)
-    elif model_type == 'random_forest':
-        model_results = train_random_forest(X_train, y_train, X_test, X_val, y_val, **params)
-    elif model_type == 'gradient_boost':
-        model_results = train_gradient_boosting(X_train, y_train, X_test, X_val, y_val, **params)
+    if model_type == 'tcn':
+        model_results = train_tcn(X_train, y_train, X_test, y_test, X_val, y_val, **params)
+        # Use adjusted y_test for TCN metrics
+        test_metrics = get_performance_metrics(model_results['y_test_adjusted'], model_results['test_predictions'])
+    elif model_type == 'lstm':
+        model_results = train_lstm(X_train, y_train, X_test, y_test, X_val, y_val, **params)
+        # Use adjusted y_test for LSTM metrics
+        test_metrics = get_performance_metrics(model_results['y_test_adjusted'], model_results['test_predictions'])
     else:
-        raise ValueError(f"Unknown model type: {model_type}")
+        if model_type == 'decision_tree':
+            model_results = train_decision_tree(X_train, y_train, X_test, X_val, y_val, **params)
+        elif model_type == 'random_forest':
+            model_results = train_random_forest(X_train, y_train, X_test, X_val, y_val, **params)
+        elif model_type == 'gradient_boost':
+            model_results = train_gradient_boosting(X_train, y_train, X_test, X_val, y_val, **params)
+        elif model_type == 'logistic_regression':
+            model_results = train_logistic_regression(X_train, y_train, X_test, X_val, y_val, **params)
+        elif model_type == 'svm':
+            model_results = train_svm(X_train, y_train, X_test, y_test, X_val, y_val, **params)
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
+        # Use original y_test for other models
+        test_metrics = get_performance_metrics(y_test, model_results['test_predictions'])
     
-    # Calculate metrics for test set
-    test_metrics = get_performance_metrics(y_test, model_results['test_predictions'])
     test_metrics['CV Score Mean'] = model_results['cv_scores'].mean()
     test_metrics['CV Score Std'] = model_results['cv_scores'].std()
     

@@ -14,12 +14,9 @@ from helper import (
     apply_feature_engineering,
     save_dataframe_to_csv,
     create_time_split_with_validation,
-    train_model, 
-    compute_permutation_importance,
-    create_feature_importance_summary,
-    plot_permutation_importance
+    train_model
 )
-from plotter import plot_model_results, plot_confusion_matrix, plot_feature_importances, plot_roc_curve
+from plotter import  plot_confusion_matrix, plot_feature_importances, plot_roc_curve
 
 def main():
     
@@ -94,6 +91,7 @@ def main():
             
     #save the dataframe to the session state
     st.session_state['df'] = df
+    st.session_state['df_original'] = df
             
     
     #spacer for the next section
@@ -244,6 +242,7 @@ def main():
             })
             
             st.success("Feature engineering applied successfully!")
+            st.session_state['df_original_feature_engineering'] = transformed_df
 
             # Option to save the transformed data
             if st.button("Save Transformed Data"):
@@ -259,6 +258,8 @@ def main():
                     name=f'transformed_data_{fe_method_name}.csv'
                 )
                 st.success("Data saved successfully!")
+                
+        
 
     st.write("\n\n")
     st.write("--------------------------------")
@@ -564,303 +565,621 @@ def main():
     # 5. Modeling
     st.subheader("5. Model Training & Evaluation")
 
-    # Add unique keys to all sliders
-    model_type = st.selectbox("Model Type", 
-                             ["decision_tree", "random_forest", "gradient_boost"],
-                             key="model_type_select")
+    # Create tabs for model info and training
+    model_tab, training_tab = st.tabs(["Model Information", "Model Training"])
 
-
-    if model_type == "decision_tree":
-        max_depth_dt = st.slider("max_depth", 1, 20, 5, 1, key="dt_depth")
-        min_samples_split_dt = st.slider("min_samples_split", 2, 20, 5, 1, key="dt_split")
-        model_params = {
-            'max_depth': max_depth_dt,
-            'min_samples_split': min_samples_split_dt
-        }
-    elif model_type == "random_forest":
-        n_estimators_rf = st.slider("n_estimators", 10, 300, 100, 10, key="rf_estimators")
-        max_depth_rf = st.slider("max_depth", 1, 20, 10, 1, key="rf_depth")
-        model_params = {
-            'n_estimators': n_estimators_rf,
-            'max_depth': max_depth_rf,
-        }
-
-    if model_type == "random_forest":
-        min_samples_split_rf = st.slider("min_samples_split", 2, 20, 5, 1, key="rf_split")
-        model_params['min_samples_split'] = min_samples_split_rf
-    elif model_type == "gradient_boost":
-        n_estimators_gb = st.slider("n_estimators", 10, 300, 100, 10, key="gb_estimators")
-        learning_rate_gb = st.select_slider("learning_rate", 
-                                            options=[0.01, 0.05, 0.1, 0.2], 
-                                            value=0.1,
-                                            key="gb_lr")
-        max_depth_gb = st.slider("max_depth", 1, 10, 3, 1, key="gb_depth")
-        model_params = {
-            'n_estimators': n_estimators_gb,
-            'learning_rate': learning_rate_gb,
-            'max_depth': max_depth_gb
-        }
-
-    # Add some spacing
-    st.write("")
-
-    if st.button("Train & Evaluate Model", key="train_model_btn"):
-        with st.spinner('Training model...'):
-            # Train model with validation set if included
-            if include_validation:
-                model_results = train_model(
-                    X_train, y_train,
-                    X_test, y_test,
-                    X_val, y_val,
-                    model_type=model_type,
-                    **model_params
-                )
-            else:
-                model_results = train_model(
-                    X_train, y_train,
-                    X_test, y_test,
-                    model_type=model_type,
-                    **model_params
-                )
+    with model_tab:
+        # Model information section
+        st.markdown("### Available Models")
+        
+        # Display model cards in a grid
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### Tree-based Models")
+            with st.expander("Decision Tree"):
+                st.markdown("""
+                    **Description**: Simple tree-based method that splits data on feature values.
+                    
+                    **Strengths**:
+                    - Highly interpretable
+                    - Handles non-linear relationships
+                    - No feature scaling needed
+                    
+                    **Key Parameters**:
+                    - max_depth
+                    - min_samples_split
+                    
+                    **Best For**: Small to medium datasets, when interpretability is crucial
+                """)
             
-            # Create main layout columns
-            metrics_col, plots_col = st.columns([1, 2])
+            with st.expander("Random Forest"):
+                st.markdown("""
+                    **Description**: Ensemble of Decision Trees using bagging.
+                    
+                    **Strengths**:
+                    - Better generalization than single trees
+                    - Robust to overfitting
+                    - Feature importance rankings
+                    
+                    **Key Parameters**:
+                    - n_estimators
+                    - max_depth
+                    - min_samples_split
+                    
+                    **Best For**: General-purpose classification, handling complex relationships
+                """)
             
-            # Left column for metrics
-            with metrics_col:
-                st.markdown("### Model Performance")
-                st.markdown("#### Test Set Metrics")
-                metrics_df = pd.DataFrame(
-                    model_results['test_metrics'].items(),
-                    columns=['Metric', 'Value']
+            with st.expander("Gradient Boosting"):
+                st.markdown("""
+                    **Description**: Sequential ensemble method that corrects previous errors.
+                    
+                    **Frameworks**:
+                    - XGBoost
+                    - LightGBM
+                    - CatBoost
+                    
+                    **Key Parameters**:
+                    - learning_rate
+                    - n_estimators
+                    - max_depth
+                    
+                    **Best For**: When you need state-of-the-art performance on structured data
+                """)
+
+        with col2:
+            st.markdown("#### Other Models")
+            with st.expander("Logistic Regression"):
+                st.markdown("""
+                    **Description**: Linear model for classification.
+                    
+                    **Strengths**:
+                    - Simple and interpretable
+                    - Fast training
+                    - Good baseline
+                    
+                    **Key Parameters**:
+                    - C (regularization)
+                    - solver
+                    - max_iter
+                    
+                    **Best For**: Linear problems, baseline model
+                """)
+            
+            with st.expander("Support Vector Machine"):
+                st.markdown("""
+                    **Description**: Finds optimal hyperplane for classification.
+                    
+                    **Strengths**:
+                    - Effective in high-dimensional spaces
+                    - Versatile through different kernels
+                    
+                    **Key Parameters**:
+                    - kernel
+                    - C
+                    - gamma
+                    
+                    **Best For**: Medium-sized datasets, complex decision boundaries
+                """)
+            
+            with st.expander("Neural Networks (LSTM/TCN)"):
+                st.markdown("""
+                    **Description**: Deep learning models for sequential data.
+                    
+                    **Types**:
+                    - LSTM: Long Short-Term Memory
+                    - TCN: Temporal Convolutional Network
+                    
+                    **Key Parameters**:
+                    - layers/units
+                    - sequence length
+                    - learning rate
+                    
+                    **Best For**: Large datasets with temporal patterns
+                """)
+    with training_tab:
+        # Model selection and training section
+        st.markdown("### Model Configuration")
+
+        # Add unique keys to all sliders
+        model_type = st.selectbox(
+            "Model Type", 
+            ["decision_tree", "random_forest", "gradient_boost", "logistic_regression", "lstm", "svm", "tcn"],
+            key="model_type_select"
+        )
+
+        # Add logistic regression specific parameters
+        if model_type == "logistic_regression":
+            C = st.slider(
+                "Inverse of regularization strength (C)", 
+                0.01, 10.0, 1.0, 0.01,
+                key="lr_c"
+            )
+            solver = st.selectbox(
+                "Solver",
+                ["lbfgs", "liblinear", "newton-cg", "sag", "saga"],
+                key="lr_solver"
+            )
+            max_iter = st.slider(
+                "Maximum iterations",
+                100, 1000, 100, 50,
+                key="lr_max_iter"
+            )
+            model_params = {
+                'C': C,
+                'solver': solver,
+                'max_iter': max_iter
+            }
+
+        if model_type == "decision_tree":
+            max_depth_dt = st.slider("max_depth", 1, 20, 5, 1, key="dt_depth")
+            min_samples_split_dt = st.slider("min_samples_split", 2, 20, 5, 1, key="dt_split")
+            model_params = {
+                'max_depth': max_depth_dt,
+                'min_samples_split': min_samples_split_dt
+            }
+        elif model_type == "random_forest":
+            n_estimators_rf = st.slider("n_estimators", 10, 300, 100, 10, key="rf_estimators")
+            max_depth_rf = st.slider("max_depth", 1, 20, 10, 1, key="rf_depth")
+            model_params = {
+                'n_estimators': n_estimators_rf,
+                'max_depth': max_depth_rf,
+            }
+
+        if model_type == "random_forest":
+            min_samples_split_rf = st.slider("min_samples_split", 2, 20, 5, 1, key="rf_split")
+            model_params['min_samples_split'] = min_samples_split_rf
+        elif model_type == "gradient_boost":
+            # First select the framework
+            framework = st.selectbox(
+                "Gradient Boosting Framework",
+                ["sklearn", "xgboost", "lightgbm", "catboost"],
+                help="""
+                - sklearn: Scikit-learn's GradientBoostingClassifier
+                - xgboost: XGBoost (faster, more features)
+                - lightgbm: LightGBM (faster, handles large datasets better)
+                - catboost: CatBoost (handles categorical variables automatically)
+                """
+            )
+            
+            # Common parameters for all frameworks
+            n_estimators = st.slider(
+                "Number of estimators",
+                min_value=10,
+                max_value=1000,
+                value=100,
+                step=10,
+                key="gb_n_estimators"
+            )
+            
+            learning_rate = st.slider(
+                "Learning rate",
+                min_value=0.001,
+                max_value=1.0,
+                value=0.1,
+                step=0.001,
+                format="%.3f",
+                key="gb_learning_rate"
+            )
+            
+            max_depth = st.slider(
+                "Maximum depth",
+                min_value=1,
+                max_value=20,
+                value=3,
+                key="gb_max_depth"
+            )
+            
+            # Framework-specific parameters
+            if framework == "xgboost":
+                subsample = st.slider(
+                    "Subsample ratio",
+                    min_value=0.1,
+                    max_value=1.0,
+                    value=1.0,
+                    key="xgb_subsample"
                 )
-                st.dataframe(metrics_df, hide_index=True)
+                colsample_bytree = st.slider(
+                    "Column sample by tree",
+                    min_value=0.1,
+                    max_value=1.0,
+                    value=1.0,
+                    key="xgb_colsample"
+                )
+                model_params = {
+                    'framework': 'xgboost',
+                    'n_estimators': n_estimators,
+                    'learning_rate': learning_rate,
+                    'max_depth': max_depth,
+                    'subsample': subsample,
+                    'colsample_bytree': colsample_bytree
+                }
                 
-                if model_results['val_metrics'] is not None:
-                    st.markdown("#### Validation Set Metrics")
-                    val_metrics_df = pd.DataFrame(
-                        model_results['val_metrics'].items(),
+            elif framework == "lightgbm":
+                num_leaves = st.slider(
+                    "Number of leaves",
+                    min_value=2,
+                    max_value=256,
+                    value=31,
+                    key="lgb_num_leaves"
+                )
+                model_params = {
+                    'framework': 'lightgbm',
+                    'n_estimators': n_estimators,
+                    'learning_rate': learning_rate,
+                    'max_depth': max_depth,
+                    'num_leaves': num_leaves
+                }
+                
+            elif framework == "catboost":
+                l2_leaf_reg = st.slider(
+                    "L2 regularization",
+                    min_value=1,
+                    max_value=10,
+                    value=3,
+                    key="cat_l2_leaf_reg"
+                )
+                model_params = {
+                    'framework': 'catboost',
+                    'n_estimators': n_estimators,
+                    'learning_rate': learning_rate,
+                    'max_depth': max_depth,
+                    'l2_leaf_reg': l2_leaf_reg
+                }
+                
+            else:  # sklearn
+                subsample = st.slider(
+                    "Subsample ratio",
+                    min_value=0.1,
+                    max_value=1.0,
+                    value=1.0,
+                    key="gb_subsample"
+                )
+                model_params = {
+                    'framework': 'sklearn',
+                    'n_estimators': n_estimators,
+                    'learning_rate': learning_rate,
+                    'max_depth': max_depth,
+                    'subsample': subsample
+                }
+
+        # In the modeling section, after other model types
+        elif model_type == "lstm":
+            # LSTM specific parameters
+            timesteps = st.slider(
+                "Time Steps",
+                min_value=2,
+                max_value=10,
+                value=3,
+                help="Number of time steps to consider for sequence",
+                key="lstm_timesteps"
+            )
+            
+            units = st.slider(
+                "LSTM Units",
+                min_value=10,
+                max_value=200,
+                value=50,
+                step=10,
+                help="Number of LSTM units in each layer",
+                key="lstm_units"
+            )
+            
+            layers = st.slider(
+                "Number of LSTM Layers",
+                min_value=1,
+                max_value=3,
+                value=1,
+                help="Number of LSTM layers in the model",
+                key="lstm_layers"
+            )
+            
+            dropout = st.slider(
+                "Dropout Rate",
+                min_value=0.0,
+                max_value=0.5,
+                value=0.2,
+                step=0.1,
+                help="Dropout rate for regularization",
+                key="lstm_dropout"
+            )
+            
+            epochs = st.slider(
+                "Training Epochs",
+                min_value=10,
+                max_value=200,
+                value=100,
+                step=10,
+                help="Number of training epochs",
+                key="lstm_epochs"
+            )
+            
+            batch_size = st.slider(
+                "Batch Size",
+                min_value=16,
+                max_value=128,
+                value=32,
+                step=16,
+                help="Training batch size",
+                key="lstm_batch_size"
+            )
+            
+            model_params = {
+                'timesteps': timesteps,
+                'units': units,
+                'layers': layers,
+                'dropout': dropout,
+                'epochs': epochs,
+                'batch_size': batch_size
+            }
+
+        # Add SVM-specific parameters
+        elif model_type == "svm":
+            kernel = st.selectbox(
+                "Kernel",
+                ["rbf", "linear", "poly", "sigmoid"],
+                help="The kernel type to be used in the algorithm",
+                key="svm_kernel"
+            )
+            
+            C = st.slider(
+                "C (Regularization)",
+                min_value=0.1,
+                max_value=10.0,
+                value=1.0,
+                step=0.1,
+                help="Regularization parameter. The strength of the regularization is inversely proportional to C",
+                key="svm_c"
+            )
+            
+            gamma = st.selectbox(
+                "Gamma",
+                ["scale", "auto"] + [str(0.1 * i) for i in range(1, 11)],
+                help="Kernel coefficient for 'rbf', 'poly' and 'sigmoid'",
+                key="svm_gamma"
+            )
+            
+            if kernel == "poly":
+                degree = st.slider(
+                    "Polynomial Degree",
+                    min_value=2,
+                    max_value=5,
+                    value=3,
+                    help="Degree of polynomial kernel function",
+                    key="svm_degree"
+                )
+                model_params = {
+                    'kernel': kernel,
+                    'C': C,
+                    'gamma': gamma if gamma in ['scale', 'auto'] else float(gamma),
+                    'degree': degree
+                }
+            else:
+                model_params = {
+                    'kernel': kernel,
+                    'C': C,
+                    'gamma': gamma if gamma in ['scale', 'auto'] else float(gamma)
+                }
+
+        # Add TCN-specific parameters
+        elif model_type == "tcn":
+            sequence_length = st.slider(
+                "Sequence Length",
+                min_value=2,
+                max_value=50,
+                value=10,
+                help="Length of input sequences",
+                key="tcn_sequence_length"
+            )
+            
+            nb_filters = st.slider(
+                "Number of Filters",
+                min_value=16,
+                max_value=128,
+                value=64,
+                step=16,
+                help="Number of filters in convolutional layers",
+                key="tcn_nb_filters"
+            )
+            
+            kernel_size = st.slider(
+                "Kernel Size",
+                min_value=2,
+                max_value=8,
+                value=3,
+                help="Size of the convolutional kernel",
+                key="tcn_kernel_size"
+            )
+            
+            nb_stacks = st.slider(
+                "Number of Stacks",
+                min_value=1,
+                max_value=5,
+                value=1,
+                help="Number of stacks of residual blocks",
+                key="tcn_nb_stacks"
+            )
+            
+            max_dilation = st.slider(
+                "Maximum Dilation",
+                min_value=1,
+                max_value=32,
+                value=8,
+                help="Maximum dilation factor (powers of 2 will be used up to this value)",
+                key="tcn_max_dilation"
+            )
+            
+            dropout_rate = st.slider(
+                "Dropout Rate",
+                min_value=0.0,
+                max_value=0.5,
+                value=0.2,
+                step=0.1,
+                help="Dropout rate for regularization",
+                key="tcn_dropout"
+            )
+            
+            learning_rate = st.slider(
+                "Learning Rate",
+                min_value=0.0001,
+                max_value=0.01,
+                value=0.001,
+                format="%.4f",
+                help="Learning rate for optimization",
+                key="tcn_learning_rate"
+            )
+            
+            epochs = st.slider(
+                "Training Epochs",
+                min_value=10,
+                max_value=200,
+                value=100,
+                step=10,
+                help="Number of training epochs",
+                key="tcn_epochs"
+            )
+            
+            batch_size = st.slider(
+                "Batch Size",
+                min_value=16,
+                max_value=128,
+                value=32,
+                step=16,
+                help="Training batch size",
+                key="tcn_batch_size"
+            )
+            
+            # Calculate dilations based on max_dilation
+            dilations = [2**i for i in range(int(np.log2(max_dilation)) + 1)]
+            
+            model_params = {
+                'sequence_length': sequence_length,
+                'nb_filters': nb_filters,
+                'kernel_size': kernel_size,
+                'nb_stacks': nb_stacks,
+                'dilations': dilations,
+                'dropout_rate': dropout_rate,
+                'learning_rate': learning_rate,
+                'epochs': epochs,
+                'batch_size': batch_size
+            }
+
+        # Add some spacing
+        st.write("")
+
+        if st.button("Train & Evaluate Model", key="train_model_btn"):
+            with st.spinner('Training model...'):
+                # Train model with validation set if included
+                if include_validation:
+                    model_results = train_model(
+                        X_train, y_train,
+                        X_test, y_test,
+                        X_val, y_val,
+                        model_type=model_type,
+                        **model_params
+                    )
+                else:
+                    model_results = train_model(
+                        X_train, y_train,
+                        X_test, y_test,
+                        model_type=model_type,
+                        **model_params
+                    )
+                
+                # Create main layout columns
+                metrics_col, plots_col = st.columns([1, 2])
+                
+                # Left column for metrics
+                with metrics_col:
+                    st.markdown("### Model Performance")
+                    st.markdown("#### Test Set Metrics")
+                    metrics_df = pd.DataFrame(
+                        model_results['test_metrics'].items(),
                         columns=['Metric', 'Value']
                     )
-                    st.dataframe(val_metrics_df, hide_index=True)
-
-            # Right column for plots
-            with plots_col:
-                # Custom CSS for plot containers
-                st.markdown("""
-                    <style>
-                        .plot-container {
-                            display: flex;
-                            justify-content: center;
-                            margin-bottom: 2rem;
-                        }
-                    </style>
-                """, unsafe_allow_html=True)
-
-                # Test Set Visualizations
-                st.markdown("#### Test Set Visualizations")
-                
-                # Confusion Matrix
-                st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-                fig_cm = plot_confusion_matrix(
-                    y_test, 
-                    model_results['test_predictions']
-                )
-                st.pyplot(fig_cm)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Feature Importance
-                st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-                fig_imp = plot_feature_importances(
-                    model_results['feature_importances']
-                )
-                st.pyplot(fig_imp)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # ROC Curve
-                st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-                fig_roc = plot_roc_curve(
-                    y_test,
-                    model_results['test_predictions_proba']
-                )
-                st.pyplot(fig_roc)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # Validation Set Visualizations (if available)
-                if model_results['val_metrics'] is not None:
-                    st.markdown("#### Validation Set Visualizations")
+                    st.dataframe(metrics_df, hide_index=True)
                     
-                    # Validation Confusion Matrix
+                    if model_results['val_metrics'] is not None:
+                        st.markdown("#### Validation Set Metrics")
+                        val_metrics_df = pd.DataFrame(
+                            model_results['val_metrics'].items(),
+                            columns=['Metric', 'Value']
+                        )
+                        st.dataframe(val_metrics_df, hide_index=True)
+
+                # Right column for plots
+                with plots_col:
+                    # Custom CSS for plot containers
+                    st.markdown("""
+                        <style>
+                            .plot-container {
+                                display: flex;
+                                justify-content: center;
+                                margin-bottom: 2rem;
+                            }
+                        </style>
+                    """, unsafe_allow_html=True)
+
+                    # Test Set Visualizations
+                    st.markdown("#### Test Set Visualizations")
+                    
+                    # Confusion Matrix
                     st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-                    fig_val_cm = plot_confusion_matrix(
-                        y_val,
-                        model_results['val_predictions']
+                    fig_cm = plot_confusion_matrix(
+                        y_test, 
+                        model_results['test_predictions']
                     )
-                    st.pyplot(fig_val_cm)
+                    st.pyplot(fig_cm)
                     st.markdown('</div>', unsafe_allow_html=True)
                     
-                    # Validation ROC Curve
+                    # Feature Importance
                     st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-                    fig_val_roc = plot_roc_curve(
-                        y_val,
-                        model_results['val_predictions_proba']
+                    fig_imp = plot_feature_importances(
+                        model_results['feature_importances']
                     )
-                    st.pyplot(fig_val_roc)
+                    st.pyplot(fig_imp)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    # ROC Curve
+                    st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+                    fig_roc = plot_roc_curve(
+                        y_test,
+                        model_results['test_predictions_proba']
+                    )
+                    st.pyplot(fig_roc)
                     st.markdown('</div>', unsafe_allow_html=True)
 
-            # Store model results in session state
-            st.session_state['model_results'] = model_results
-            st.session_state['initial_training_done'] = True
-            
-            st.success('Model training complete!')
-    
-    # # After initial training button
-    # if 'initial_training_done' in st.session_state:
-    #     model_results = st.session_state['model_results']
-        
-    #     st.write("\n")
-    #     st.markdown("### Feature Selection & Retraining")
-        
-    #     # Get number of features
-    #     n_features = len(model_results['feature_importances'])
-        
-    #     col1, col2 = st.columns(2)
-    #     with col1:
-    #         n_top_features = st.slider(
-    #             "Number of top features to keep",
-    #             min_value=2,
-    #             max_value=n_features,
-    #             value=min(10, n_features),
-    #             key="n_top_features"
-    #         )
-        
-    #     with col2:
-    #         n_permutations = st.slider(
-    #             "Number of permutations for importance calculation",
-    #             min_value=5,
-    #             max_value=50,
-    #             value=10,
-    #             key="n_permutations"
-    #         )
-
-    #     if st.button("Compute Permutation Importance & Retrain", key="retrain_btn"):
-    #         with st.spinner("Computing permutation importance..."):
-    #             # Compute permutation importance
-    #             perm_importance = compute_permutation_importance(
-    #                 model_results['model'],
-    #                 X_test,
-    #                 y_test,
-    #                 n_repeats=n_permutations
-    #             )
-                
-    #             # Create feature importance summary
-    #             importance_summary = create_feature_importance_summary(
-    #                 model_results['feature_importances'],
-    #                 perm_importance,
-    #                 X_train.columns
-    #             )
-                
-    #             # Store in session state
-    #             st.session_state['importance_summary'] = importance_summary
-                
-    #             # Plot permutation importance
-    #             fig_perm = plot_permutation_importance(importance_summary)
-    #             st.pyplot(fig_perm)
-                
-    #             # Get top features
-    #             top_features = importance_summary.index[:n_top_features].tolist()
-                
-    #             # Create filtered datasets
-    #             X_train_filtered = X_train[top_features]
-    #             X_test_filtered = X_test[top_features]
-    #             X_val_filtered = X_val[top_features] if include_validation else None
-                
-    #             # Store filtered datasets in session state
-    #             st.session_state.update({
-    #                 'X_train_filtered': X_train_filtered,
-    #                 'X_test_filtered': X_test_filtered,
-    #                 'X_val_filtered': X_val_filtered,
-    #                 'top_features': top_features
-    #             })
-                
-    #             # Retrain model with filtered features
-    #             with st.spinner('Retraining model with selected features...'):
-    #                 if include_validation:
-    #                     retrained_results = train_model(
-    #                         X_train_filtered, y_train,
-    #                         X_test_filtered, y_test,
-    #                         X_val_filtered, y_val,
-    #                         model_type=model_type,
-    #                         **model_params
-    #                     )
-    #                 else:
-    #                     retrained_results = train_model(
-    #                         X_train_filtered, y_train,
-    #                         X_test_filtered, y_test,
-    #                         model_type=model_type,
-    #                         **model_params
-    #                     )
-                    
-    #                 # Store retrained results
-    #                 st.session_state.update({
-    #                     'retrained_model_results': retrained_results,
-    #                     'retraining_done': True
-    #                 })
-
-    #     # Show results if retraining is done
-    #     if 'retraining_done' in st.session_state:
-    #         retrained_results = st.session_state['retrained_model_results']
-    #         model_results = st.session_state['model_results']
-            
-    #         st.markdown("### Model Performance Comparison")
-            
-    #         # Create comparison dataframe
-    #         comparison_data = {
-    #             'Metric': [],
-    #             'Original Model': [],
-    #             'Retrained Model': []
-    #         }
-            
-    #         for metric in model_results['test_metrics']:
-    #             comparison_data['Metric'].append(metric)
-    #             comparison_data['Original Model'].append(
-    #                 model_results['test_metrics'][metric]
-    #             )
-    #             comparison_data['Retrained Model'].append(
-    #                 retrained_results['test_metrics'][metric]
-    #             )
-            
-    #         comparison_df = pd.DataFrame(comparison_data)
-    #         st.session_state['comparison_df'] = comparison_df
-    #         st.dataframe(comparison_df, hide_index=True)
-            
-    #         # Display visualizations
-    #         metrics_col, plots_col = st.columns([1, 2])
-            
-    #         with plots_col:
-    #             st.markdown("#### Retrained Model Visualizations")
-                
-    #             # Confusion Matrix
-    #             st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-    #             fig_cm = plot_confusion_matrix(
-    #                 y_test,
-    #                 retrained_results['test_predictions']
-    #             )
-    #             st.pyplot(fig_cm)
-    #             st.markdown('</div>', unsafe_allow_html=True)
-                
-    #             # ROC Curve
-    #             st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-    #             fig_roc = plot_roc_curve(
-    #                 y_test,
-    #                 retrained_results['test_predictions_proba']
-    #             )
-    #             st.pyplot(fig_roc)
-    #             st.markdown('</div>', unsafe_allow_html=True)
+                    # Validation Set Visualizations (if available)
+                    if model_results['val_metrics'] is not None:
+                        st.markdown("#### Validation Set Visualizations")
                         
-    #             st.session_state['retraining_done'] = True
-    #             st.success('Model retraining complete!')
+                        # Validation Confusion Matrix
+                        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+                        fig_val_cm = plot_confusion_matrix(
+                            y_val,
+                            model_results['val_predictions']
+                        )
+                        st.pyplot(fig_val_cm)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        # Validation ROC Curve
+                        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+                        fig_val_roc = plot_roc_curve(
+                            y_val,
+                            model_results['val_predictions_proba']
+                        )
+                        st.pyplot(fig_val_roc)
+                        st.markdown('</div>', unsafe_allow_html=True)
 
+                # Store model results in session state
+                st.session_state['model_results'] = model_results
+                st.session_state['initial_training_done'] = True
+                
+                st.success('Model training complete!')
+                
+                #pring the final list of session keys
+                st.write(st.session_state.keys())
+    
 
 
 if __name__ == "__main__":
