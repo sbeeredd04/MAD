@@ -1,3 +1,7 @@
+import os
+import json
+from datetime import datetime
+import uuid
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -101,8 +105,8 @@ def main():
     st.write("\n\n")
     st.write("--------------------------------")
     
-    # 2. Feature Engineering
-    st.subheader("2. Feature Engineering")
+    # 2. Feature Relevance (formerly Feature Engineering)
+    st.subheader("2. Feature Relevance")
 
     # Check if we have data loaded
     if 'df' not in st.session_state:
@@ -118,14 +122,6 @@ def main():
     # Get current dataframe
     df = st.session_state['df']
 
-    # Get feature engineering options
-    fe_options = get_feature_engineering_options()
-    selected_method = st.selectbox(
-        "Select Feature Engineering Method:",
-        options=list(fe_options.keys()),
-        help="Choose the method to transform your features"
-    )
-
     # Get numeric columns and potential target columns
     numeric_cols = [col for col in df.columns if df[col].dtype != 'object']
     potential_targets = [col for col in numeric_cols if df[col].nunique() == 2]
@@ -139,12 +135,7 @@ def main():
 
     # Update numeric columns to exclude target
     feature_cols = [col for col in numeric_cols if col != target_col]
-    selected_fe_cols = st.multiselect(
-        "Select features to transform:",
-        feature_cols,
-        default=feature_cols
-    )
-
+    
     # Select correlation method
     corr_method = st.selectbox(
         "Select Correlation Method:",
@@ -156,10 +147,79 @@ def main():
         """
     )
 
+    # Add correlation threshold slider
+    corr_threshold = st.slider(
+        "Correlation threshold (absolute value):", 
+        min_value=0.0, 
+        max_value=1.0, 
+        value=0.05, 
+        step=0.01,
+        key="correlation_threshold"
+    )
+
+    if st.button("Compute Correlations"):
+        with st.spinner("Computing correlations..."):
+            # Compute correlations
+            correlations, corr_dict = compute_correlations(
+                df, 
+                target_col=target_col, 
+                threshold=corr_threshold
+            )
+
+            # Display results
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("### All correlations with target")
+                st.dataframe(correlations)
+            
+            with col2:
+                st.write("### Selected features")
+                st.write(corr_dict['selected_features'])
+
+            # Store in session state
+            st.session_state.update({
+                'correlated_features': corr_dict['selected_features'],
+                'correlation_method': corr_method,
+                'target_column': target_col,
+                'correlations': correlations,
+                'selected_features': corr_dict['selected_features']
+            })
+            
+            st.success("Correlation analysis complete!")
+
+    st.write("\n\n")
+    st.write("--------------------------------")
+
+    # 3. Feature Engineering (formerly Feature Relevance)
+    st.subheader("3. Feature Engineering")
+
+    # Check if correlation analysis has been done
+    if 'correlated_features' not in st.session_state:
+        st.warning("Please compute correlations first.")
+        st.stop()
+
+    # Get feature engineering options
+    fe_options = get_feature_engineering_options()
+    selected_method = st.selectbox(
+        "Select Feature Engineering Method:",
+        options=list(fe_options.keys()),
+        help="Choose the method to transform your features"
+    )
+
+    # Add feature selection for engineering
+    selected_fe_cols = st.multiselect(
+        "Select features for engineering:",
+        options=st.session_state['correlated_features'],
+        default=st.session_state['correlated_features'],
+        help="Choose which correlated features to transform"
+    )
+
     # Initialize parameters dictionary
     fe_params = {
-        'target_column': target_col,
-        'correlation_method': corr_method
+        'target_column': st.session_state['target_column'],
+        'correlation_method': st.session_state['correlation_method'],
+        'selected_features': selected_fe_cols  
     }
 
     # Show method-specific parameters
@@ -184,7 +244,7 @@ def main():
             'window_size': window_size,
             'operations': operations
         })
-    
+
     elif selected_method == 'Lagging Features':
         lag_periods = st.multiselect(
             "Select Lag Periods:",
@@ -199,16 +259,16 @@ def main():
 
     if st.button("Apply Feature Engineering"):
         with st.spinner("Applying feature engineering..."):
-            # Apply feature engineering
+            # Apply feature engineering only to correlated features
             transformed_df, feature_summary = apply_feature_engineering(
                 df,
-                selected_fe_cols,
-                target_col=target_col,
+                selected_fe_cols,  # Use selected features here instead of all correlated features
+                target_col=st.session_state['target_column'],
                 method=selected_method,
                 params=fe_params
             )
             
-            # Display results in two columns
+            # Display results
             col1, col2 = st.columns(2)
             
             with col1:
@@ -217,119 +277,34 @@ def main():
                 st.dataframe(transformed_df.head(10))
             
             with col2:
-                st.write("### Feature Correlations with Target")
-                # Get correlations with target and sort by absolute value
-                all_features = [col for col in transformed_df.columns 
-                              if col not in [target_col, 'Data']]
-                correlations = transformed_df[all_features].corrwith(
-                    transformed_df[target_col], 
-                    method=corr_method
-                )
-                correlations = correlations.abs().sort_values(ascending=False)
-                
-                # Display correlation values as a formatted dataframe
-                correlation_data = pd.DataFrame({
-                    'Feature': correlations.index,
-                    'Correlation': correlations.values
-                })
-                st.dataframe(correlation_data)
+                st.write("### Feature Summary")
+                st.write(feature_summary['feature_stats'])
             
-            # Store transformed data and parameters in session state
+            # Store results in session state
             st.session_state.update({
                 'transformed_df': transformed_df,
                 'feature_summary': feature_summary,
-                'target_column': target_col,
-                'selected_features': all_features,  # Update to include new features
-                'correlation_method': corr_method,
-                'feature_correlations': correlation_data
+                'selected_features': [col for col in transformed_df.columns 
+                                    if col not in [st.session_state['target_column'], 'Data']]
             })
             
+            st.session_state['feature_engineered_df'] = transformed_df
+            
             st.success("Feature engineering applied successfully!")
-            st.session_state['df_original_feature_engineering'] = transformed_df
-
-            # Option to save the transformed data
-            if st.button("Save Transformed Data"):
-                fe_method_name = selected_method.lower().replace(' ', '_')
-                if selected_method == 'Rolling Features':
-                    fe_method_name = f'rolling_features_{fe_params["window_size"]}_{"-".join(fe_params["operations"])}'
-                elif selected_method == 'Lagging Features':
-                    fe_method_name = f'lagging_features_{"-".join(map(str, fe_params["lag_periods"]))}'
-                
-                save_dataframe_to_csv(
-                    transformed_df, 
-                    file_path='../data/transformed_data/', 
-                    name=f'transformed_data_{fe_method_name}.csv'
-                )
-                st.success("Data saved successfully!")
-                
-        
 
     st.write("\n\n")
     st.write("--------------------------------")
     
-    # 3. Feature Relevance
-    st.subheader("3. Feature Relevance")
-
-    # Check if feature engineering has been applied
-    if 'transformed_df' not in st.session_state:
-        st.warning("Please apply feature engineering first.")
-        st.stop()
-
-    # Get the transformed dataframe and target column
-    df = st.session_state['transformed_df']
-    target_col = st.session_state['target_column']
-
-    # Add unique key to the slider
-    corr_threshold = st.slider(
-        "Correlation threshold (absolute value):", 
-        min_value=0.0, 
-        max_value=1.0, 
-        value=0.05, 
-        step=0.01,
-        key="feature_relevance_threshold"
-    )
-
-    # Initialize selected_features if not in session state
-    if 'selected_features' not in st.session_state:
-        st.session_state['selected_features'] = [
-            col for col in df.columns 
-            if col not in [target_col, 'Data']
-        ]
-
-    # Add unique key to the button
-    if st.button("Compute Feature Relevance", key="compute_feature_relevance_btn"):
-        with st.spinner("Computing correlations..."):
-            # Compute correlations using the transformed data
-            correlations, corr_dict = compute_correlations(
-                df, 
-                target_col=target_col, 
-                threshold=corr_threshold
-            )
-
-            # Display results
-            st.write("### All correlations with target (sorted by absolute value):")
-            st.dataframe(correlations, key="correlations_table")
-
-            st.write("### Selected features after correlation filtering:")
-            st.write(corr_dict['selected_features'])
-
-            # Update selected features in session state
-            st.session_state['selected_features'] = corr_dict['selected_features']
-            st.session_state['feature_relevance'] = correlations
-
-            st.success("Feature relevance analysis complete!")
-
-    # Get selected features for next steps
-    selected_features = st.session_state['selected_features']
-
-    #spacer for the next section
-    st.write("\n\n")
-    st.write("--------------------------------")
-    
-
-
     # 4. Train/Test/Validation Split
     st.subheader("4. Train/Test/Validation Split")
+    
+    #check if transformed dataframe is in the session state
+    if 'transformed_df' not in st.session_state:
+        st.error("Please apply feature engineering first before splitting the data.")
+        st.stop()
+        
+    # Get transformed dataframe
+    df = st.session_state['transformed_df']
     
     # Convert 'Data' column to datetime if it's not already
     df['Data'] = pd.to_datetime(df['Data'])
@@ -520,7 +495,12 @@ def main():
     
     # Add button to update session state with split data
     if st.button("Apply Data Split", help="Click to update the training, testing, and validation sets"):
+        
         with st.spinner("Updating data splits..."):
+            
+            #get selected features
+            selected_features = st.session_state['selected_features']
+            
             # Debug prints for date ranges
             st.write("### Date Ranges for Splits:")
             st.write(f"Training dates: {df[train_mask]['Data'].min()} to {df[train_mask]['Data'].max()}")
@@ -1156,17 +1136,25 @@ def main():
 
                 # Store model results in session state
                 st.session_state['model_results'] = model_results
+                
+                #saving the model performance metrics to the session state
+                st.session_state['model_metrics'] = metrics_df
+                st.session_state['val_metrics'] = val_metrics_df if model_results['val_metrics'] is not None else None
+                st.session_state['model_type'] = model_type
+                st.session_state['model_params'] = model_params
+                st.session_state['model_trained'] = True
                 st.session_state['initial_training_done'] = True
                 
                 st.success('Model training complete!')
                 
-                #save session keys as a json file using a save button
-                if st.button("Save Session Keys", key="save_session_keys_btn"):
-                    #pring the final list of session keys
-                    st.write(st.session_state.keys())
-                    #save the session keys as a json file
-                    with open('session_keys.json', 'w') as f:
-                        json.dump(st.session_state.keys(), f)
+        #save session keys as a json file using a save button
+        if st.button("Save Session Data", key="save_session_btn"):
+            with st.spinner("Saving session data..."):
+                try:
+                    saved_path = save_session_data(st.session_state)
+                    st.success(f"Session data saved to {saved_path}")
+                except Exception as e:
+                    st.error(f"Error saving session data: {str(e)}")
     
     with model_tab:
         # Model information section
@@ -1387,6 +1375,132 @@ def train_and_evaluate_random_forest(X_train, y_train, X_test, y_test, X_val, y_
     
     return model_results
 
+def save_session_data(session_state, base_dir='./saved_models'):
+    """Save session state data with full key-value pairs in timestamped folders"""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    model_dir = os.path.join(base_dir, f'model_{timestamp}')
+    
+    # Create subfolders including metrics
+    data_dir = os.path.join(model_dir, 'data')
+    model_artifacts_dir = os.path.join(model_dir, 'model_artifacts')
+    plots_dir = os.path.join(model_dir, 'plots')
+    metrics_dir = os.path.join(model_dir, 'metrics')
+    
+    for directory in [data_dir, model_artifacts_dir, plots_dir, metrics_dir]:
+        os.makedirs(directory, exist_ok=True)
+
+    # Initialize session data with model performance section
+    session_data = {
+        'metadata': {
+            'timestamp': timestamp,
+            'session_id': str(uuid.uuid4())
+        },
+        'model_performance': {
+            'test_metrics': {},
+            'validation_metrics': None,
+            'model_type': session_state.get('model_type'),
+            'model_params': session_state.get('model_params')
+        },
+        'saved_keys': {}
+    }
+
+    # Save model metrics
+    if 'model_metrics' in session_state:
+        metrics_df = session_state['model_metrics']
+        metrics_dict = dict(zip(metrics_df['Metric'], metrics_df['Value']))
+        session_data['model_performance']['test_metrics'] = metrics_dict
+        
+        # Save metrics DataFrame
+        metrics_path = os.path.join(metrics_dir, f'test_metrics_{timestamp}.csv')
+        metrics_df.to_csv(metrics_path, index=False)
+        
+    if 'val_metrics' in session_state and session_state['val_metrics'] is not None:
+        val_metrics_df = session_state['val_metrics']
+        val_metrics_dict = dict(zip(val_metrics_df['Metric'], val_metrics_df['Value']))
+        session_data['model_performance']['validation_metrics'] = val_metrics_dict
+        
+        # Save validation metrics DataFrame
+        val_metrics_path = os.path.join(metrics_dir, f'validation_metrics_{timestamp}.csv')
+        val_metrics_df.to_csv(val_metrics_path, index=False)
+
+    # Rest of existing save logic
+    for key, value in session_state.items():
+        try:
+            if isinstance(value, pd.DataFrame):
+                df_path = os.path.join(data_dir, f'{key}_{timestamp}.csv')
+                value.to_csv(df_path, index=False)
+                session_data['saved_keys'][key] = {
+                    'type': 'DataFrame',
+                    'path': df_path,
+                    'shape': value.shape
+                }
+            
+            elif isinstance(value, (plt.Figure, dict)):
+                # Save plots and dictionaries
+                if isinstance(value, plt.Figure):
+                    fig_path = os.path.join(plots_dir, f'{key}_{timestamp}.png')
+                    value.savefig(fig_path)
+                    session_data['saved_keys'][key] = {
+                        'type': 'Figure',
+                        'path': fig_path
+                    }
+                else:
+                    dict_path = os.path.join(model_artifacts_dir, f'{key}_{timestamp}.json')
+                    with open(dict_path, 'w') as f:
+                        json.dump(value, f, indent=2)
+                    session_data['saved_keys'][key] = {
+                        'type': 'Dictionary',
+                        'path': dict_path
+                    }
+            
+            elif hasattr(value, 'get_params'):
+                # Handle sklearn models
+                model_path = os.path.join(model_artifacts_dir, f'{key}_{timestamp}.joblib')
+                from joblib import dump
+                dump(value, model_path)
+                session_data['saved_keys'][key] = {
+                    'type': 'Model',
+                    'path': model_path,
+                    'params': value.get_params()
+                }
+            
+            else:
+                # Save basic types directly
+                session_data['saved_keys'][key] = {
+                    'type': str(type(value).__name__),
+                    'value': value if isinstance(value, (int, float, str, bool, list)) else str(value)
+                }
+
+        except Exception as e:
+            session_data['saved_keys'][key] = {
+                'type': 'Error',
+                'error_message': str(e)
+            }
+
+    # Save updated session metadata
+    metadata_path = os.path.join(model_dir, f'session_metadata_{timestamp}.json')
+    with open(metadata_path, 'w') as f:
+        json.dump(session_data, f, indent=2)
+
+    return model_dir
+    
+    # Save dataframes
+    if 'df' in session_state:
+        df_path = os.path.join(session_dir, f'df_{timestamp}.csv')
+        session_state['df'].to_csv(df_path, index=False)
+        session_data['df_path'] = df_path
+        
+    if 'transformed_df' in session_state:
+        trans_path = os.path.join(session_dir, f'transformed_df_{timestamp}.csv')
+        session_state['transformed_df'].to_csv(trans_path, index=False)
+        session_data['transformed_df_path'] = trans_path
+    
+    # Save session state to JSON
+    json_path = os.path.join(session_dir, f'session_{timestamp}.json')
+    with open(json_path, 'w') as f:
+        json.dump(session_data, f, indent=2)
+        
+    return json_path
 
 if __name__ == "__main__":
     main()

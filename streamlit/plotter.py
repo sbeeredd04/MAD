@@ -19,7 +19,7 @@ def plot_feature_importances(feature_importances):
     fig, ax = plt.subplots(figsize=(6, 5))
     
     if feature_importances is not None:
-        top_n = feature_importances.head(10)
+        top_n = feature_importances.head(20)
         sns.barplot(x=top_n.values, y=top_n.index, ax=ax)
         ax.set_title('Top 10 Feature Importances')
     else:

@@ -121,19 +121,28 @@ def get_feature_engineering_options():
     }
     
 def add_lagging_features(df, feature_cols, lag_periods=None):
-
+    """
+    Add lagged features while maintaining original features.
+    Organizes columns as: Data, target, feature1, feature1_lags, feature2, feature2_lags...
+    """
     df = df.copy()
     
     # Default lag periods if none specified
     if lag_periods is None:
         lag_periods = [1]
     
-    # Store non-feature columns
-    non_feature_cols = [col for col in df.columns if col not in feature_cols]
-    new_df = df.copy()
+    # Find target column (non-Data, non-feature column)
+    target_col = next(col for col in df.columns if col not in feature_cols + ['Data'])
     
-    # Add lag features
+    # Initialize new dataframe with Data and target
+    new_df = df[['Data', target_col]].copy()
+    
+    # Add each feature and its lags
     for col in feature_cols:
+        # Add original feature
+        new_df[col] = df[col]
+        
+        # Add lag features immediately after
         for lag in lag_periods:
             new_col_name = f"{col}_lag_{lag}"
             new_df[new_col_name] = df[col].shift(lag)
@@ -141,8 +150,13 @@ def add_lagging_features(df, feature_cols, lag_periods=None):
     return new_df.dropna()
 
 def apply_feature_engineering(df, feature_cols, target_col, method='Raw Features', params=None):
+    """Apply feature engineering and keep only selected/engineered features."""
     df = df.copy()
     corr_method = params.get('correlation_method', 'pearson')
+    
+    # Keep only necessary columns
+    columns_to_keep = feature_cols + [target_col, 'Data']
+    df = df[columns_to_keep]
     
     if method == 'Raw Features':
         transformed_df = df
@@ -173,30 +187,33 @@ def apply_feature_engineering(df, feature_cols, target_col, method='Raw Features
             lag_periods=params['lag_periods']
         )
     
-    # Calculate feature summary
+    # Get actual engineered feature columns from transformed dataframe
+    engineered_features = [col for col in transformed_df.columns 
+                          if col not in [target_col, 'Data']]
+    
     feature_summary = {
-        'correlation_with_target': transformed_df[feature_cols].corrwith(
+        'correlation_with_target': transformed_df[engineered_features].corrwith(
             transformed_df[target_col], 
             method=corr_method
         ),
-        'correlation_matrix': transformed_df[feature_cols].corr(method=corr_method),
-        'feature_stats': transformed_df[feature_cols].describe(),
-        'missing_values': transformed_df[feature_cols].isnull().sum()
+        'correlation_matrix': transformed_df[engineered_features].corr(method=corr_method),
+        'feature_stats': transformed_df[engineered_features].describe(),
+        'missing_values': transformed_df[engineered_features].isnull().sum()
     }
     
     return transformed_df, feature_summary
 
 def add_rolling_features(df, feature_cols, rolling_window=3, rolling_ops=None):
-
+    """Add rolling features and remove original features."""
     df = df.copy()
-        
+    
     # Default operations if none specified
     if rolling_ops is None:
         rolling_ops = ['mean']
     
-    # Store non-feature columns
-    non_feature_cols = [col for col in df.columns if col not in feature_cols]
-    new_df = df.copy()
+    # Keep target and date columns
+    non_feature_cols = ['Data', next(col for col in df.columns if col not in feature_cols + ['Data'])]
+    new_df = df[non_feature_cols].copy()
     
     # Calculate rolling features
     for col in feature_cols:
@@ -217,13 +234,11 @@ def add_rolling_features(df, feature_cols, rolling_window=3, rolling_ops=None):
             elif op == 'skew':
                 new_df[f"{col}_roll_skew_{rolling_window}"] = roll_obj.skew()
             elif op == 'zscore':
-                # Calculate rolling z-score
                 roll_mean = roll_obj.mean()
                 roll_std = roll_obj.std()
                 new_df[f"{col}_roll_zscore_{rolling_window}"] = (df[col] - roll_mean) / (roll_std + 1e-9)
-                
+    
     return new_df.dropna()
-
 
 def compute_correlations(df, target_col='Y', threshold=0.05):
 
