@@ -13,11 +13,16 @@ The Market Anomaly Detection (MAD) project involves building an anomaly detectio
 ## Upcoming Features
 - **[DONE]Correlation Filter**: Implement a correlation filter to select relevant features before applying feature engineering.
 - **[DONE]Feature Engineering Fixes**: Ensure that all features have the necessary engineered features applied. Apply feature engineering to selected features only and then remove the features that are not needed or used from the multiselected list of features.
-- **Chatbot Integration**: Integrate a chatbot for user interaction and assistance within the application.
+- **[DONE]hatbot Integration**: Integrate a chatbot for user interaction and assistance within the application.
 - **[DONE]Model Saving**: Implement functionality to save updated models after training.
 - **[DONE]Detailed Model Training and Testing**: Review model training and testing processes in detail using Jupyter Notebook files.
 - **Auto Tune Feature for Gradient Boosting**: Implementing auto tuning for gradient boosting models.
 - **Unsupervised models**: Add unsupervised models and their respective auto tuning parameters along with testing. 
+- **Detection Test**: Simulation data and suggesting buy or sell for investement data based on simulated dataset. 
+
+## Issues and Bugs: 
+- **Chatbot UI** : fix the chatbot UI and message UI
+- **Validation set**: fix the order of validation input to be first and then test set the order is messed up. Thats possibly causing errors. 
 
 ## Documentation
 ### Code Structure
