@@ -23,7 +23,7 @@ def init_gemini_chat():
             {
                 "role": "assistant",
                 "parts": """
-                    You are Gemini, an AI-driven chatbot designed to explain investment strategies in clear,
+                    You are Mady, an AI-driven chatbot designed to explain investment strategies in clear,
                     accessible terms so that end users can make informed decisions and learn more about the
                     stock market. Your role is to:
 
@@ -91,53 +91,78 @@ def generate_gemini_response(chat, user_input):
         yield chunk.text
 
 
+# Main chatbot UI function
 def chatbot_ui():
-    """
-    Renders the Streamlit UI for the Gemini chatbot with chunk-wise streaming.
     
-    1. We skip the very first assistant message in the history (the system-like prompt).
-    2. We display conversation as "Gemini: ..." vs. "You: ...".
-    3. On new user input, we stream the assistant's reply chunk by chunk in real-time.
-    """
-    st.subheader("Gemini AI Chatbot")
+    # Add CSS for scrollable container
+    st.markdown("""
+        <style>
+        .chat-container {
+            height: calc(100vh - 200px); /* Adjust for header/padding */
+            overflow-y: auto;
+            padding: 20px;
+            margin-bottom: 60px; /* Space for input field */
+        }
+        .input-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: calc(25% - 40px); /* Match chatbot column width */
+            background: white;
+            padding: 10px;
+            z-index: 1000;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.title("💬 Mady")
 
-    # Initialize the chat in session state if not already there
+    # Initialize the chat in session state
     if "gemini_chat" not in st.session_state:
         st.session_state["gemini_chat"] = init_gemini_chat()
+        st.session_state["chat_history"] = []
 
-    # Display existing conversation (except the hidden prompt)
-    for i, entry in enumerate(st.session_state["gemini_chat"].history):
-        role = entry.role.lower()
-        text_content = extract_text(entry.parts)
-
-        # Skip the first assistant message (the system-like instructions)
-        if role == "assistant" and i == 0:
-            continue
-
-        # Display user vs. assistant
-        if role == "assistant":
-            st.markdown(f"<span style='color: red'>**Gemini:**</span> {text_content}", unsafe_allow_html=True)        
+    # Display the existing chat history
+    for role, message in st.session_state["chat_history"]:
+        if role == "Gemini":
+            st.markdown(f"""
+            <div style='background-color:rgba(0, 0, 0, 0.1); padding:10px; border-radius:10px; margin-bottom:5px;'>
+                <b style='color:red;'>Gemini:</b> {message}
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            st.markdown(f"<span style='color: cyan'>**You:**</span> {text_content}", unsafe_allow_html=True)        
+            st.markdown(f"""
+            <div style='background-color:rgba(100, 100, 100, 0.1); padding:10px; border-radius:10px; margin-bottom:5px; text-align:right;'>
+                <b style='color:cyan;'>You:</b> {message}
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Function to handle sending the message
+    def send_message():
+        user_input = st.session_state["user_input"].strip()
+        if user_input:
+            # Add user's message to chat history
+            st.session_state["chat_history"].append(("You", user_input))
+
+            # Get the full response from Gemini
+            response = "".join(generate_gemini_response(st.session_state["gemini_chat"], user_input))
+
+            # Add Gemini's response to chat history
+            st.session_state["chat_history"].append(("Gemini", response))
+
+            # Reset the input field
+            st.session_state["user_input"] = ""
+
+    # User input area with Enter key support
+    st.text_input(
+        "Type your message...",
+        key="user_input",
+        on_change=send_message
+    )
+
+    # Check if the Send button is clicked
+    if st.button("Send"):
+        send_message()
 
 
-    st.write("---")
-
-    # Get user input
-    user_query = st.text_input("Type your message here and click Send:", "")
-
-    if st.button("Send") and user_query.strip():
-        # Display the user's message right away
-        st.markdown(f"**You:** {user_query}")
-
-        # Prepare a placeholder to update chunk-by-chunk for Gemini's response
-        response_placeholder = st.empty()
-
-        # We accumulate chunks to build the final response
-        full_response = ""
-
-        # Stream chunks from generate_gemini_response(...)
-        for chunk_text in generate_gemini_response(st.session_state["gemini_chat"], user_query):
-            full_response += chunk_text
-            # Update the placeholder with the progressively built text
-            response_placeholder.markdown(f"**Gemini:** {full_response}")
+    st.markdown('</div>', unsafe_allow_html=True)

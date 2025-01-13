@@ -55,17 +55,21 @@ def train_tcn(X_train, y_train, X_test, y_test, X_val=None, y_val=None, **params
     epochs = params.get('epochs', 100)
     batch_size = params.get('batch_size', 32)
     
-    # Scale features
+# Scale features
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    # Reshape data for TCN
-    X_train_reshaped = reshape_data_for_tcn(X_train_scaled, sequence_length)
+    # Apply SMOTE to scaled training data
+    sm = SMOTE(random_state=42, sampling_strategy=0.50)
+    X_train_sm, y_train_sm = sm.fit_resample(X_train_scaled, y_train)
+    
+    # Reshape SMOTE-enhanced data for TCN
+    X_train_reshaped = reshape_data_for_tcn(X_train_sm, sequence_length)
     X_test_reshaped = reshape_data_for_tcn(X_test_scaled, sequence_length)
     
-    # Adjust target variables
-    y_train_adjusted = y_train[sequence_length-1:]
+    # Adjust target variables for SMOTE-enhanced data
+    y_train_adjusted = y_train_sm[sequence_length-1:]
     y_test_adjusted = y_test[sequence_length-1:]
     
     # Prepare validation data if provided

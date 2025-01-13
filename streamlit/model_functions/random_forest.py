@@ -1,14 +1,20 @@
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
 import pandas as pd
+from imblearn.over_sampling import SMOTE
 
 def train_random_forest(X_train, y_train, X_test, y_test, X_val=None, y_val=None, **params):
     """
     Train a random forest classifier and return predictions and model details.
     """
     # Initialize and train model
+   
+    #smote on the training data
+    sm = SMOTE(random_state=42, sampling_strategy=0.50)
+    X_train_sm, y_train_sm = sm.fit_resample(X_train, y_train)
+    
     model = RandomForestClassifier(**params, random_state=42)
-    model.fit(X_train, y_train)
+    model.fit(X_train_sm, y_train_sm)
     
     # Generate predictions for test set
     test_pred = model.predict(X_test)
@@ -22,7 +28,7 @@ def train_random_forest(X_train, y_train, X_test, y_test, X_val=None, y_val=None
         val_pred_proba = model.predict_proba(X_val)[:, 1]
     
     # Cross-validation
-    cv_scores = cross_val_score(model, X_train, y_train, cv=5)
+    cv_scores = cross_val_score(model, X_train_sm, y_train_sm, cv=5)
     
     # Feature importances
     feat_importances = pd.Series(model.feature_importances_, index=X_train.columns)
@@ -55,6 +61,11 @@ def auto_tune_random_forest(X_train, y_train, X_test, y_test, X_val=None, y_val=
     - min_samples_leaf: minimum samples required at a leaf node
     - max_features: number of features to consider when looking for the best split
     """
+    
+    #smore on the training data
+    sm = SMOTE(random_state=42, sampling_strategy=0.50)
+    X_train_sm, y_train_sm = sm.fit_resample(X_train, y_train)
+    
     # Define parameter grid
     param_grid = {
         'n_estimators': [100, 150, 200, 300], 
@@ -82,7 +93,7 @@ def auto_tune_random_forest(X_train, y_train, X_test, y_test, X_val=None, y_val=
         try:
             # Train model with current parameters
             model = RandomForestClassifier(**params, random_state=42)
-            model.fit(X_train, y_train)
+            model.fit(X_train_sm, y_train_sm)
             
             # Generate predictions
             test_pred = model.predict(X_test)
@@ -96,7 +107,7 @@ def auto_tune_random_forest(X_train, y_train, X_test, y_test, X_val=None, y_val=
             roc_auc = roc_auc_score(y_test, test_pred_proba)
             
             # Cross-validation
-            cv_scores = cross_val_score(model, X_train, y_train, cv=5)
+            cv_scores = cross_val_score(model, X_train_sm, y_train_sm, cv=5)
             
             # Store results
             model_results = {
@@ -120,10 +131,12 @@ def auto_tune_random_forest(X_train, y_train, X_test, y_test, X_val=None, y_val=
             
             # Calculate overall score
             overall_score = (
-                accuracy * 0.3 +
-                f1 * 0.3 +
-                roc_auc * 0.4
+                accuracy * 0.2 +    # Reduced from 0.3
+                f1 * 0.3 +         # Reduced from 0.3
+                roc_auc * 0.2 +    # Reduced from 0.4
+                recall * 0.3       # Added recall with 0.3 weight
             )
+            
             
             all_results.append({
                 'params': params,
@@ -162,10 +175,18 @@ def auto_tune_random_forest(X_train, y_train, X_test, y_test, X_val=None, y_val=
 
     # Print top 5 models' metrics
     for i, result in enumerate(all_results[:5], 1):
-        print(f"Model {i}:")
-        print(f"Parameters: {result['params']}")
-        print(f"Overall Score: {result['overall_score']:.4f}")
-        print("Metrics:", result['metrics'])
+        print(f"\nModel {i}:")
+        print("Performance Metrics:")
+        print(f"{'Metric':<15} {'Score':<10}")
+        print("-" * 25)
+        print(f"{'Accuracy':<15} {result['metrics']['Accuracy']:.4f}")
+        print(f"{'Precision':<15} {result['metrics']['Precision']:.4f}")
+        print(f"{'Recall':<15} {result['metrics']['Recall']:.4f} *")  # Highlight recall
+        print(f"{'F1':<15} {result['metrics']['F1']:.4f}")
+        print(f"{'ROC AUC':<15} {result['metrics']['ROC_AUC']:.4f}")
+        print(f"{'CV Mean':<15} {result['metrics']['CV_Mean']:.4f}")
+        print(f"{'CV Std':<15} {result['metrics']['CV_Std']:.4f}")
+        print(f"\nOverall Score: {result['overall_score']:.4f}")
         print("---")
     
     return all_results[:5]

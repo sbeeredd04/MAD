@@ -1,0 +1,329 @@
+{
+  "metadata": {
+    "timestamp": "20250112_164235",
+    "session_id": "78329989-52be-4533-84de-93f596948450"
+  },
+  "model_performance": {
+    "test_metrics": {
+      "Accuracy": 0.9282511210762332,
+      "Precision": 0.6857142857142857,
+      "Recall": 0.8275862068965517,
+      "F1": 0.75,
+      "TN": 183.0,
+      "FP": 11.0,
+      "FN": 5.0,
+      "TP": 24.0,
+      "CV Score Mean": 0.5745098039215686,
+      "CV Score Std": 0.1758540427955836
+    },
+    "validation_metrics": null,
+    "model_type": "decision_tree",
+    "model_params": {
+      "auto_tune": true
+    }
+  },
+  "saved_keys": {
+    "y_test": {
+      "type": "Series",
+      "value": "888     0\n889     0\n890     0\n891     0\n892     0\n       ..\n1106    0\n1107    0\n1108    0\n1109    0\n1110    0\nName: Y, Length: 223, dtype: int64"
+    },
+    "val_metrics": {
+      "type": "NoneType",
+      "value": "None"
+    },
+    "save_session_btn": {
+      "type": "bool",
+      "value": true
+    },
+    "test_slider": {
+      "type": "int",
+      "value": 20
+    },
+    "correlation_method": {
+      "type": "str",
+      "value": "pearson"
+    },
+    "train_slider": {
+      "type": "int",
+      "value": 80
+    },
+    "data_split_applied": {
+      "type": "bool",
+      "value": true
+    },
+    "feature_columns": {
+      "type": "list",
+      "value": [
+        "XAU BGNL",
+        "ECSURPUS",
+        "BDIY",
+        "CRY",
+        "DXY",
+        "JPY",
+        "GBP",
+        "Cl1",
+        "VIX",
+        "USGG30YR",
+        "GT10",
+        "USGG2YR",
+        "USGG3M",
+        "US0001M",
+        "GTDEM30Y",
+        "GTDEM10Y",
+        "GTDEM2Y",
+        "EONIA",
+        "GTITL30YR",
+        "GTITL10YR",
+        "GTITL2YR",
+        "GTJPY30YR",
+        "GTJPY10YR",
+        "GTJPY2YR",
+        "GTGBP30Y",
+        "GTGBP20Y",
+        "GTGBP2Y",
+        "LUMSTRUU",
+        "LMBITR",
+        "LUACTRUU",
+        "LF98TRUU",
+        "LG30TRUU",
+        "LP01TREU",
+        "EMUSTRUU",
+        "LF94TRUU",
+        "MXUS",
+        "MXEU",
+        "MXJP",
+        "MXBR",
+        "MXRU",
+        "MXIN",
+        "MXCN"
+      ]
+    },
+    "df": {
+      "type": "DataFrame",
+      "path": "./saved_models\\model_20250112_164235\\data\\df_20250112_164235.csv",
+      "shape": [
+        1111,
+        44
+      ]
+    },
+    "correlated_features": {
+      "type": "list",
+      "value": [
+        "VIX",
+        "GTITL2YR",
+        "GTITL10YR",
+        "GTITL30YR",
+        "MXJP",
+        "MXEU",
+        "LP01TREU",
+        "LG30TRUU",
+        "MXUS",
+        "LF98TRUU",
+        "MXIN",
+        "EONIA",
+        "EMUSTRUU",
+        "LF94TRUU",
+        "LUACTRUU",
+        "JPY",
+        "MXCN",
+        "MXRU",
+        "LMBITR",
+        "GTDEM30Y",
+        "GTDEM10Y",
+        "GTJPY10YR",
+        "GTDEM2Y",
+        "GTJPY30YR",
+        "GTJPY2YR",
+        "LUMSTRUU",
+        "DXY",
+        "GTGBP20Y",
+        "GTGBP30Y",
+        "GBP",
+        "ECSURPUS",
+        "BDIY",
+        "CRY",
+        "Cl1"
+      ]
+    },
+    "target_column": {
+      "type": "str",
+      "value": "Y"
+    },
+    "correlations": {
+      "type": "Series",
+      "value": "VIX          0.598432\nGTITL2YR     0.304528\nGTITL10YR    0.297573\nGTITL30YR    0.295000\nMXJP        -0.279399\nMXEU        -0.253877\nLP01TREU    -0.209774\nLG30TRUU    -0.197232\nMXUS        -0.193928\nLF98TRUU    -0.189661\nMXIN        -0.188942\nEONIA        0.180311\nEMUSTRUU    -0.169475\nLF94TRUU    -0.156550\nLUACTRUU    -0.153544\nJPY         -0.151197\nMXCN        -0.149581\nMXRU        -0.148848\nLMBITR      -0.143607\nGTDEM30Y     0.141537\nGTDEM10Y     0.139933\nGTJPY10YR    0.133660\nGTDEM2Y      0.130607\nGTJPY30YR    0.114555\nGTJPY2YR     0.112314\nLUMSTRUU    -0.104897\nDXY          0.103227\nGTGBP20Y     0.100142\nGTGBP30Y     0.099777\nGBP         -0.093201\nECSURPUS    -0.090772\nBDIY        -0.083440\nCRY         -0.074102\nCl1         -0.070141\nMXBR        -0.043429\nGTGBP2Y      0.035010\nUSGG2YR     -0.034909\nUSGG3M      -0.025935\nUSGG30YR     0.019255\nUS0001M      0.015379\nXAU BGNL    -0.011535\nGT10        -0.004776\ndtype: float64"
+    },
+    "correlation_threshold": {
+      "type": "float",
+      "value": 0.05
+    },
+    "splits": {
+      "type": "Dictionary",
+      "path": "./saved_models\\model_20250112_164235\\model_artifacts\\splits_20250112_164235.json"
+    },
+    "feature_engineered_df": {
+      "type": "DataFrame",
+      "path": "./saved_models\\model_20250112_164235\\data\\feature_engineered_df_20250112_164235.csv",
+      "shape": [
+        1111,
+        36
+      ]
+    },
+    "feature_summary": {
+      "type": "Error",
+      "error_message": "Object of type Series is not JSON serializable"
+    },
+    "X_train": {
+      "type": "DataFrame",
+      "path": "./saved_models\\model_20250112_164235\\data\\X_train_20250112_164235.csv",
+      "shape": [
+        888,
+        34
+      ]
+    },
+    "X_test": {
+      "type": "DataFrame",
+      "path": "./saved_models\\model_20250112_164235\\data\\X_test_20250112_164235.csv",
+      "shape": [
+        223,
+        34
+      ]
+    },
+    "df_original": {
+      "type": "DataFrame",
+      "path": "./saved_models\\model_20250112_164235\\data\\df_original_20250112_164235.csv",
+      "shape": [
+        1111,
+        44
+      ]
+    },
+    "selected_features": {
+      "type": "list",
+      "value": [
+        "VIX",
+        "GTITL2YR",
+        "GTITL10YR",
+        "GTITL30YR",
+        "MXJP",
+        "MXEU",
+        "LP01TREU",
+        "LG30TRUU",
+        "MXUS",
+        "LF98TRUU",
+        "MXIN",
+        "EONIA",
+        "EMUSTRUU",
+        "LF94TRUU",
+        "LUACTRUU",
+        "JPY",
+        "MXCN",
+        "MXRU",
+        "LMBITR",
+        "GTDEM30Y",
+        "GTDEM10Y",
+        "GTJPY10YR",
+        "GTDEM2Y",
+        "GTJPY30YR",
+        "GTJPY2YR",
+        "LUMSTRUU",
+        "DXY",
+        "GTGBP20Y",
+        "GTGBP30Y",
+        "GBP",
+        "ECSURPUS",
+        "BDIY",
+        "CRY",
+        "Cl1"
+      ]
+    },
+    "transformed_df": {
+      "type": "DataFrame",
+      "path": "./saved_models\\model_20250112_164235\\data\\transformed_df_20250112_164235.csv",
+      "shape": [
+        1111,
+        36
+      ]
+    },
+    "prev_validation_state": {
+      "type": "bool",
+      "value": false
+    },
+    "gemini_chat": {
+      "type": "ChatSession",
+      "value": "ChatSession(\n    model=genai.GenerativeModel(\n        model_name='models/gemini-1.5-flash',\n        generation_config={},\n        safety_settings={},\n        tools=None,\n        system_instruction=None,\n        cached_content=None\n    ),\n    history=[protos.Content({'parts': [{'text': '\\n          ...             '}], 'role': 'assistant'}), protos.Content({'parts': [{'text': 'Hi Gemini!'}], 'role': 'user'}), protos.Content({'parts': [{'text': 'Hello! How c...lp you today?'}], 'role': 'assistant'}), protos.Content({'parts': [{'text': 'hi'}], 'role': 'user'}), protos.Content({'parts': [{'text': 'Hi there! Wh...assist you.\\n'}], 'role': 'model'}), protos.Content({'parts': [{'text': 'what are you...hat do you do'}], 'role': 'user'}), protos.Content({'parts': [{'text': 'I am Gemini,...nformation.\\n'}], 'role': 'model'})]\n)"
+    },
+    "train_model_btn": {
+      "type": "bool",
+      "value": false
+    },
+    "model_metrics": {
+      "type": "DataFrame",
+      "path": "./saved_models\\model_20250112_164235\\data\\model_metrics_20250112_164235.csv",
+      "shape": [
+        10,
+        2
+      ]
+    },
+    "initial_training_done": {
+      "type": "bool",
+      "value": true
+    },
+    "model_results": {
+      "type": "Error",
+      "error_message": "Object of type DecisionTreeClassifier is not JSON serializable"
+    },
+    "include_validation": {
+      "type": "bool",
+      "value": false
+    },
+    "y_train": {
+      "type": "Series",
+      "value": "0      0\n1      0\n2      0\n3      0\n4      1\n      ..\n883    0\n884    0\n885    0\n886    0\n887    0\nName: Y, Length: 888, dtype: int64"
+    },
+    "model_type": {
+      "type": "str",
+      "value": "decision_tree"
+    },
+    "model_trained": {
+      "type": "bool",
+      "value": true
+    },
+    "chat_history": {
+      "type": "list",
+      "value": [
+        [
+          "You",
+          "hi"
+        ],
+        [
+          "Gemini",
+          "Hi there! What's on your mind today?  Are you looking to learn about a specific investment strategy, understand a market trend, or perhaps get help building a model? Let me know how I can assist you.\n"
+        ],
+        [
+          "You",
+          "what are you and what do you do"
+        ],
+        [
+          "Gemini",
+          "I am Gemini, an AI-powered chatbot designed to help people understand and navigate the world of investing.  I do this by:\n\n* **Explaining complex investment concepts in simple terms:**  Think of me as your personal finance translator.  I can break down jargon and make investing more accessible.\n\n* **Guiding you through model building (if the platform offers this feature):**  If you want to build your own investment models, I can help you through the process, from data preparation to interpreting the results.\n\n* **Providing market insights:** I can give you summaries of current market trends and connect those trends to practical investment strategies.\n\n* **Answering your questions:** I can help you understand various investment strategies, risk management, and long-term investment planning.\n\nEssentially, I aim to empower you to make informed investment decisions by providing clear explanations, guidance, and relevant information.\n"
+        ]
+      ]
+    },
+    "user_input": {
+      "type": "str",
+      "value": ""
+    },
+    "data_analysis": {
+      "type": "Dictionary",
+      "path": "./saved_models\\model_20250112_164235\\model_artifacts\\data_analysis_20250112_164235.json"
+    },
+    "model_params": {
+      "type": "Dictionary",
+      "path": "./saved_models\\model_20250112_164235\\model_artifacts\\model_params_20250112_164235.json"
+    },
+    "model_type_select": {
+      "type": "str",
+      "value": "decision_tree"
+    }
+  }
+}

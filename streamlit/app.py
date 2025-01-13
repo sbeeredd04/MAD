@@ -25,12 +25,31 @@ from helper import (
 from plotter import  plot_confusion_matrix, plot_feature_importances, plot_roc_curve
 from model_functions.decision_tree import  auto_tune_decision_tree
 from model_functions.random_forest import auto_tune_random_forest
+from model_functions.gradient_boosting_classifier import auto_tune_gradient_boosting
 
 def main():
-    
+    # Set wide layout
     st.set_page_config(layout="wide")
 
-    model_col, chatbot_col = st.columns([1, 2])
+    # Apply custom CSS for padding
+    st.markdown(
+        """
+        <style>
+        .main {
+            padding: 20px;
+        }
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Adjust column width ratio to 20% for chatbot, 80% for model
+    model_col, chatbot_col = st.columns([12, 4])  
+
     
     with chatbot_col:
         # Display the Gemini chatbot UI
@@ -473,87 +492,87 @@ def main():
             plt.tight_layout()
             st.pyplot(fig)
 
-        # Calculate split dates and create masks
+        # Calculate split dates chronologically
         total_days = (max_date - min_date).days
-        test_split_date = min_date + pd.Timedelta(days=int(st.session_state.splits['train'] * total_days / 100))
-        
+        train_end_date = min_date + pd.Timedelta(days=int(st.session_state.splits['train'] * total_days / 100))
+
         if include_validation:
-            val_split_date = test_split_date + pd.Timedelta(days=int(st.session_state.splits['test'] * total_days / 100))
-        
-        # Calculate and display sample counts
-        train_mask = df['Data'] < test_split_date
+            val_end_date = train_end_date + pd.Timedelta(days=int(st.session_state.splits['validation'] * total_days / 100))
+
+        # Create masks chronologically
+        train_mask = df['Data'] < train_end_date
         if include_validation:
-            test_mask = (df['Data'] >= test_split_date) & (df['Data'] < val_split_date)
-            val_mask = df['Data'] >= val_split_date
+            val_mask = (df['Data'] >= train_end_date) & (df['Data'] < val_end_date)
+            test_mask = df['Data'] >= val_end_date
         else:
-            test_mask = df['Data'] >= test_split_date
-        
-        # Display sample counts in horizontal layout
+            test_mask = df['Data'] >= train_end_date
+
+        # Display sample counts chronologically
         cols = st.columns(3)
         with cols[0]:
             train_samples = len(df[train_mask])
             st.metric("Train Samples", f"{train_samples:,}")
-        
-        with cols[1]:
-            test_samples = len(df[test_mask])
-            st.metric("Test Samples", f"{test_samples:,}")
-        
-        with cols[2]:
-            if include_validation:
+
+        if include_validation:
+            with cols[1]:
                 val_samples = len(df[val_mask])
                 st.metric("Validation Samples", f"{val_samples:,}")
-        
-        
-        # Add button to update session state with split data
-        if st.button("Apply Data Split", help="Click to update the training, testing, and validation sets"):
             
+            with cols[2]:
+                test_samples = len(df[test_mask])
+                st.metric("Test Samples", f"{test_samples:,}")
+        else:
+            with cols[1]:
+                test_samples = len(df[test_mask])
+                st.metric("Test Samples", f"{test_samples:,}")
+
+        # Apply data split button
+        if st.button("Apply Data Split", help="Click to update the training, validation, and testing sets"):
             with st.spinner("Updating data splits..."):
-                
-                #get selected features
                 selected_features = st.session_state['selected_features']
                 
-                # Debug prints for date ranges
+                # Debug prints chronologically
                 st.write("### Date Ranges for Splits:")
                 st.write(f"Training dates: {df[train_mask]['Data'].min()} to {df[train_mask]['Data'].max()}")
-                st.write(f"Testing dates: {df[test_mask]['Data'].min()} to {df[test_mask]['Data'].max()}")
                 if include_validation:
                     st.write(f"Validation dates: {df[val_mask]['Data'].min()} to {df[val_mask]['Data'].max()}")
+                    st.write(f"Testing dates: {df[test_mask]['Data'].min()} to {df[test_mask]['Data'].max()}")
+                else:
+                    st.write(f"Testing dates: {df[test_mask]['Data'].min()} to {df[test_mask]['Data'].max()}")
                 
-                # Store split data in session state
+                # Store split data
                 if include_validation:
-                    X_train, X_test, X_val, y_train, y_test, y_val = create_time_split_with_validation(
+                    X_train, X_val, X_test, y_train, y_val, y_test = create_time_split_with_validation(
                         df, 
-                        target_col=target_col,  # Make sure to use the selected target_col
+                        target_col=target_col,
                         selected_features=selected_features,
-                        test_split_date=test_split_date, 
-                        val_split_date=val_split_date
+                        train_end_date=train_end_date,
+                        val_end_date=val_end_date
                     )
                     
-                    # Additional debug info about shapes
                     st.write("### Data Shapes:")
                     st.write(f"X_train shape: {X_train.shape}")
-                    st.write(f"X_test shape: {X_test.shape}")
                     st.write(f"X_val shape: {X_val.shape}")
+                    st.write(f"X_test shape: {X_test.shape}")
                     
                     st.session_state.update({
                         'X_train': X_train,
-                        'X_test': X_test,
                         'X_val': X_val,
+                        'X_test': X_test,
                         'y_train': y_train,
-                        'y_test': y_test,
                         'y_val': y_val,
+                        'y_test': y_test,
                         'include_validation': include_validation,
                         'data_split_applied': True
                     })
                 else:
                     X_train, X_test, y_train, y_test = create_time_split(
-                        df, 
-                        target_col=target_col,  # Make sure to use the selected target_col
+                        df,
+                        target_col=target_col,
                         selected_features=selected_features,
-                        split_date=test_split_date
+                        split_date=train_end_date
                     )
                     
-                    # Additional debug info about shapes
                     st.write("### Data Shapes:")
                     st.write(f"X_train shape: {X_train.shape}")
                     st.write(f"X_test shape: {X_test.shape}")
@@ -671,7 +690,8 @@ def main():
                     model_params = {'auto_tune': True}
 
             elif model_type == "gradient_boost":
-                # First select the framework
+
+                # Select the framework
                 framework = st.selectbox(
                     "Gradient Boosting Framework",
                     ["sklearn", "xgboost", "lightgbm", "catboost"],
@@ -682,107 +702,132 @@ def main():
                     - catboost: CatBoost (handles categorical variables automatically)
                     """
                 )
-                
-                # Common parameters for all frameworks
-                n_estimators = st.slider(
-                    "Number of estimators",
-                    min_value=10,
-                    max_value=1000,
-                    value=100,
-                    step=10,
-                    key="gb_n_estimators"
+
+                # Add auto-tune checkbox
+                use_auto_tune_gb = st.checkbox(
+                    "Use Auto-Tuning",
+                    help="Automatically try different combinations of parameters to find the best model"
                 )
-                
-                learning_rate = st.slider(
-                    "Learning rate",
-                    min_value=0.001,
-                    max_value=1.0,
-                    value=0.1,
-                    step=0.001,
-                    format="%.3f",
-                    key="gb_learning_rate"
-                )
-                
-                max_depth = st.slider(
-                    "Maximum depth",
-                    min_value=1,
-                    max_value=20,
-                    value=3,
-                    key="gb_max_depth"
-                )
-                
-                # Framework-specific parameters
-                if framework == "xgboost":
-                    subsample = st.slider(
-                        "Subsample ratio",
-                        min_value=0.1,
+
+                if not use_auto_tune_gb:
+                    # ==========
+                    # Manual Parameter Selection
+                    # ==========
+
+                    n_estimators = st.slider(
+                        "Number of estimators",
+                        min_value=10,
+                        max_value=1000,
+                        value=100,
+                        step=10,
+                        key="gb_n_estimators"
+                    )
+
+                    learning_rate = st.slider(
+                        "Learning rate",
+                        min_value=0.001,
                         max_value=1.0,
-                        value=1.0,
-                        key="xgb_subsample"
+                        value=0.1,
+                        step=0.001,
+                        format="%.3f",
+                        key="gb_learning_rate"
                     )
-                    colsample_bytree = st.slider(
-                        "Column sample by tree",
-                        min_value=0.1,
-                        max_value=1.0,
-                        value=1.0,
-                        key="xgb_colsample"
-                    )
-                    model_params = {
-                        'framework': 'xgboost',
-                        'n_estimators': n_estimators,
-                        'learning_rate': learning_rate,
-                        'max_depth': max_depth,
-                        'subsample': subsample,
-                        'colsample_bytree': colsample_bytree
-                    }
-                    
-                elif framework == "lightgbm":
-                    num_leaves = st.slider(
-                        "Number of leaves",
-                        min_value=2,
-                        max_value=256,
-                        value=31,
-                        key="lgb_num_leaves"
-                    )
-                    model_params = {
-                        'framework': 'lightgbm',
-                        'n_estimators': n_estimators,
-                        'learning_rate': learning_rate,
-                        'max_depth': max_depth,
-                        'num_leaves': num_leaves
-                    }
-                    
-                elif framework == "catboost":
-                    l2_leaf_reg = st.slider(
-                        "L2 regularization",
+
+                    max_depth = st.slider(
+                        "Maximum depth",
                         min_value=1,
-                        max_value=10,
+                        max_value=20,
                         value=3,
-                        key="cat_l2_leaf_reg"
+                        key="gb_max_depth"
                     )
+
+                    if framework == "xgboost":
+                        subsample = st.slider(
+                            "Subsample ratio",
+                            min_value=0.1,
+                            max_value=1.0,
+                            value=1.0,
+                            key="xgb_subsample"
+                        )
+                        colsample_bytree = st.slider(
+                            "Column sample by tree",
+                            min_value=0.1,
+                            max_value=1.0,
+                            value=1.0,
+                            key="xgb_colsample"
+                        )
+                        model_params = {
+                            'framework': 'xgboost',
+                            'n_estimators': n_estimators,
+                            'learning_rate': learning_rate,
+                            'max_depth': max_depth,
+                            'subsample': subsample,
+                            'colsample_bytree': colsample_bytree
+                        }
+
+                    elif framework == "lightgbm":
+                        num_leaves = st.slider(
+                            "Number of leaves",
+                            min_value=2,
+                            max_value=256,
+                            value=31,
+                            key="lgb_num_leaves"
+                        )
+                        model_params = {
+                            'framework': 'lightgbm',
+                            'n_estimators': n_estimators,
+                            'learning_rate': learning_rate,
+                            'max_depth': max_depth,
+                            'num_leaves': num_leaves
+                        }
+
+                    elif framework == "catboost":
+                        l2_leaf_reg = st.slider(
+                            "L2 regularization",
+                            min_value=1,
+                            max_value=10,
+                            value=3,
+                            key="cat_l2_leaf_reg"
+                        )
+                        model_params = {
+                            'framework': 'catboost',
+                            'n_estimators': n_estimators,
+                            'learning_rate': learning_rate,
+                            'max_depth': max_depth,
+                            'l2_leaf_reg': l2_leaf_reg
+                        }
+
+                    else:  # sklearn
+                        subsample = st.slider(
+                            "Subsample ratio",
+                            min_value=0.1,
+                            max_value=1.0,
+                            value=1.0,
+                            key="gb_subsample"
+                        )
+                        model_params = {
+                            'framework': 'sklearn',
+                            'n_estimators': n_estimators,
+                            'learning_rate': learning_rate,
+                            'max_depth': max_depth,
+                            'subsample': subsample
+                        }
+
+                else:
+                    # ==========
+                    # Auto-Tuning
+                    # ==========
+
+                    st.info("Auto-tuning will try multiple parameter combinations to find the best model. "
+                            "This may take a few minutes.")
+
+                    # Instead of collecting manual params, we just flag that we want auto-tune
+                    # plus store which framework we chose
                     model_params = {
-                        'framework': 'catboost',
-                        'n_estimators': n_estimators,
-                        'learning_rate': learning_rate,
-                        'max_depth': max_depth,
-                        'l2_leaf_reg': l2_leaf_reg
+                        'auto_tune': True, 
+                        'framework': framework
                     }
-                    
-                else:  # sklearn
-                    subsample = st.slider(
-                        "Subsample ratio",
-                        min_value=0.1,
-                        max_value=1.0,
-                        value=1.0,
-                        key="gb_subsample"
-                    )
-                    model_params = {
-                        'framework': 'sklearn',
-                        'n_estimators': n_estimators,
-                        'learning_rate': learning_rate,
-                        'max_depth': max_depth,
-                        'subsample': subsample
-                    }
+
 
             # In the modeling section, after other model types
             elif model_type == "lstm":
@@ -1050,6 +1095,19 @@ def main():
                                 **model_params
                             )
                         
+                    elif model_type == "gradient_boost":
+                        if model_params.get('auto_tune'):
+                            model_results = train_and_evaluate_gradient_boost(X_train, y_train, X_test, y_test, X_val, y_val, model_params)
+                            
+                        else: 
+                            model_results = train_model(
+                                X_train, y_train,
+                                X_test, y_test,
+                                X_val, y_val,
+                                model_type=model_type,
+                                **model_params
+                            )
+                            
                     else:
                         # Original training code
                         model_results = train_model(
@@ -1359,6 +1417,50 @@ def train_and_evaluate_random_forest(X_train, y_train, X_test, y_test, X_val, y_
         X_train, y_train,
         X_test, y_test,
         X_val=X_val, y_val=y_val
+    )
+    
+    # Display top models in an expander
+    with st.expander("Top 5 Models from Auto-Tuning"):
+        for i, result in enumerate(top_models, 1):
+            st.markdown(f"**Model {i}**")
+            st.write(f"Parameters: {result['params']}")
+            st.write(f"Overall Score: {result['overall_score']:.4f}")
+            st.write("Metrics:", result['metrics'])
+            st.write("---")
+    
+    # Use the best model's results for visualization
+    model_results = top_models[0]['model_results']
+    
+    test_metrics = get_performance_metrics(y_test, model_results['test_predictions'])
+    test_metrics['CV Score Mean'] = model_results['cv_scores'].mean()
+    test_metrics['CV Score Std'] = model_results['cv_scores'].std()
+    
+    val_metrics = None
+    if X_val is not None and y_val is not None and model_results['val_predictions'] is not None:
+        val_metrics = get_performance_metrics(y_val, model_results['val_predictions'])
+    
+    model_results['test_metrics'] = test_metrics
+    model_results['val_metrics'] = val_metrics
+    
+    progress_text.empty()
+    
+    return model_results
+
+def train_and_evaluate_gradient_boost(X_train, y_train, X_test, y_test, X_val, y_val, model_params):
+    """Train and evaluate the Gradient Boosting model."""
+    progress_text = st.empty()
+    progress_text.text("Auto-tuning in progress... This may take a few minutes.")
+    
+    #get the framework from model_params
+    framework = model_params.get('framework')
+    
+    print(f"FRAMEWORK: {framework}")
+    
+    # Get top models from auto-tuning
+    top_models = auto_tune_gradient_boosting(
+        X_train, y_train,
+        X_test, y_test,
+        X_val=X_val, y_val=y_val, framework=framework
     )
     
     # Display top models in an expander

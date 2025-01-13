@@ -287,35 +287,48 @@ def create_time_split(df, target_col='Y', selected_features=None, split_date='20
 
     return X_train, X_test, y_train, y_test
 
-def create_time_split_with_validation(df, target_col, selected_features, test_split_date, val_split_date):
-    # Convert dates to datetime if they're not already
-    if isinstance(test_split_date, str):
-        test_split_date = pd.to_datetime(test_split_date)
-    if isinstance(val_split_date, str):
-        val_split_date = pd.to_datetime(val_split_date)
+def create_time_split_with_validation(df, target_col, selected_features, train_end_date, val_end_date):
+    """Split time series data chronologically: train -> validation -> test
     
-    # Ensure dates are datetime64[ns]
-    if not isinstance(test_split_date, pd.Timestamp):
-        test_split_date = pd.Timestamp(test_split_date)
-    if not isinstance(val_split_date, pd.Timestamp):
-        val_split_date = pd.Timestamp(val_split_date)
+    Args:
+        df: DataFrame with 'Data' column
+        target_col: Target variable column name
+        selected_features: List of feature columns
+        train_end_date: End date for training data (start of validation)
+        val_end_date: End date for validation data (start of test)
+    
+    Returns:
+        Tuple of (X_train, X_val, X_test, y_train, y_val, y_test)
+    """
+    # Convert dates to datetime
+    if isinstance(train_end_date, str):
+        train_end_date = pd.to_datetime(train_end_date)
+    if isinstance(val_end_date, str):
+        val_end_date = pd.to_datetime(val_end_date)
+    
+    # Ensure datetime64[ns]
+    if not isinstance(train_end_date, pd.Timestamp):
+        train_end_date = pd.Timestamp(train_end_date)
+    if not isinstance(val_end_date, pd.Timestamp):
+        val_end_date = pd.Timestamp(val_end_date)
 
-    # Create masks for splitting
-    train_mask = df['Data'] < test_split_date
-    test_mask = (df['Data'] >= test_split_date) & (df['Data'] < val_split_date)
-    val_mask = df['Data'] >= val_split_date
+    # Create chronological masks
+    train_mask = df['Data'] < train_end_date
+    val_mask = (df['Data'] >= train_end_date) & (df['Data'] < val_end_date)
+    test_mask = df['Data'] >= val_end_date
     
-    # Split features
+    # Split features chronologically
     X_train = df[train_mask][selected_features]
-    X_test = df[test_mask][selected_features]
     X_val = df[val_mask][selected_features]
+    X_test = df[test_mask][selected_features]
     
-    # Split target
+    # Split target chronologically
     y_train = df[train_mask][target_col]
-    y_test = df[test_mask][target_col]
     y_val = df[val_mask][target_col]
+    y_test = df[test_mask][target_col]
     
-    return X_train, X_test, X_val, y_train, y_test, y_val
+    # Return in chronological order
+    return X_train, X_val, X_test, y_train, y_val, y_test
 
 
 def get_performance_metrics(y_true, y_pred):

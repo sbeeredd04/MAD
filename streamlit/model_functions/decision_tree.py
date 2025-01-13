@@ -7,34 +7,43 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import ParameterGrid, cross_val_score
 import pandas as pd
 from tqdm import tqdm
+from imblearn.over_sampling import SMOTE
+import pandas as pd
 
-def train_decision_tree(X_train, y_train, X_test, y_test, X_val=None, y_val=None, **params):
+def train_decision_tree(X_train, y_train, 
+                              X_test, y_test, 
+                              X_val=None, y_val=None, 
+                              **params):
 
-    # Initialize and train model
-    model = DecisionTreeClassifier(**params, random_state=42)
-    model.fit(X_train, y_train)
-    
-    # Generate predictions for test set
+    # 1. SMOTE on the training data
+    sm = SMOTE(random_state=42, sampling_strategy=0.50)
+    X_train_sm, y_train_sm = sm.fit_resample(X_train, y_train)
+
+    # 2. Initialize and train model on SMOTE-enhanced data
+    model = DecisionTreeClassifier(random_state=42, **params)
+    model.fit(X_train_sm, y_train_sm)
+
+    # 3. Predictions on the (untouched) test set
     test_pred = model.predict(X_test)
     test_pred_proba = model.predict_proba(X_test)[:, 1]
-    
-    # Generate predictions for validation set if provided
+
+    # 4. Predictions on the (untouched) validation set if provided
     val_pred = None
     val_pred_proba = None
     if X_val is not None and y_val is not None:
         val_pred = model.predict(X_val)
         val_pred_proba = model.predict_proba(X_val)[:, 1]
-    
-    # Cross-validation
-    cv_scores = cross_val_score(model, X_train, y_train, cv=5)
-    
-    # Feature importances
+
+    # 5. Cross-validation on the SMOTE-enhanced training data
+    cv_scores = cross_val_score(model, X_train_sm, y_train_sm, cv=5)
+
+    # 6. Feature importances
     feat_importances = pd.Series(model.feature_importances_, index=X_train.columns)
     feat_importances.sort_values(ascending=False, inplace=True)
-    
-    # Calculate ROC AUC
+
+    # 7. Calculate ROC AUC on the test set
     roc_auc = roc_auc_score(y_test, test_pred_proba)
-    
+
     return {
         'model': model,
         'test_predictions': test_pred,
@@ -45,10 +54,13 @@ def train_decision_tree(X_train, y_train, X_test, y_test, X_val=None, y_val=None
         'feature_importances': feat_importances,
         'roc_auc': roc_auc
     }
-    
 
 def auto_tune_decision_tree(X_train, y_train, X_test, y_test, X_val=None, y_val=None):
 
+     # Initialize SMOTE
+    sm = SMOTE(random_state=42, sampling_strategy=0.50)
+    X_train_sm, y_train_sm = sm.fit_resample(X_train, y_train)
+    
     # Define focused parameter grid
     param_grid = {
         'criterion': ['gini', 'entropy'],  # Measure of split quality
@@ -75,7 +87,7 @@ def auto_tune_decision_tree(X_train, y_train, X_test, y_test, X_val=None, y_val=
         try:
             # Train model with current parameters
             model = DecisionTreeClassifier(**params, random_state=42)
-            model.fit(X_train, y_train)
+            model.fit(X_train_sm, y_train_sm)
             
             # Generate predictions
             test_pred = model.predict(X_test)
@@ -89,7 +101,7 @@ def auto_tune_decision_tree(X_train, y_train, X_test, y_test, X_val=None, y_val=
             roc_auc = roc_auc_score(y_test, test_pred_proba)
             
             # Cross-validation
-            cv_scores = cross_val_score(model, X_train, y_train, cv=5)
+            cv_scores = cross_val_score(model, X_train_sm, y_train_sm, cv=5)
             
             # Feature importances
             feat_importances = pd.Series(
@@ -129,9 +141,10 @@ def auto_tune_decision_tree(X_train, y_train, X_test, y_test, X_val=None, y_val=
             
             # Calculate overall score
             overall_score = (
-                accuracy * 0.3 +
-                f1 * 0.3 +
-                roc_auc * 0.4
+                accuracy * 0.2 +    # Reduced from 0.3
+                f1 * 0.3 +         # Reduced from 0.3
+                roc_auc * 0.2 +    # Reduced from 0.4
+                recall * 0.3       # Added recall with 0.3 weight
             )
             
             all_results.append({
@@ -169,16 +182,19 @@ def auto_tune_decision_tree(X_train, y_train, X_test, y_test, X_val=None, y_val=
     print(f"\nAuto-tuning complete. Found {len(all_results)} successful models.")
     print(f"Best score achieved: {all_results[0]['overall_score'] if all_results else 'No successful models'}")
 
-    #printing top 5 models accuracy, precision, recall, f1, roc_auc, cv_mean, cv_std
     for i, result in enumerate(all_results[:5], 1):
-        print(f"Model {i}:")
-        print(f"Accuracy: {result['metrics']['Accuracy']:.4f}")
-        print(f"Precision: {result['metrics']['Precision']:.4f}")
-        print(f"Recall: {result['metrics']['Recall']:.4f}")
-        print(f"F1: {result['metrics']['F1']:.4f}")
-        print(f"ROC AUC: {result['metrics']['ROC_AUC']:.4f}")
-        print(f"CV Mean: {result['metrics']['CV_Mean']:.4f}")
-        print(f"CV Std: {result['metrics']['CV_Std']:.4f}")
+        print(f"\nModel {i}:")
+        print("Performance Metrics:")
+        print(f"{'Metric':<15} {'Score':<10}")
+        print("-" * 25)
+        print(f"{'Accuracy':<15} {result['metrics']['Accuracy']:.4f}")
+        print(f"{'Precision':<15} {result['metrics']['Precision']:.4f}")
+        print(f"{'Recall':<15} {result['metrics']['Recall']:.4f} *")  # Highlight recall
+        print(f"{'F1':<15} {result['metrics']['F1']:.4f}")
+        print(f"{'ROC AUC':<15} {result['metrics']['ROC_AUC']:.4f}")
+        print(f"{'CV Mean':<15} {result['metrics']['CV_Mean']:.4f}")
+        print(f"{'CV Std':<15} {result['metrics']['CV_Std']:.4f}")
+        print(f"\nOverall Score: {result['overall_score']:.4f}")
         print("---")
     
     return all_results[:5]

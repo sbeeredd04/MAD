@@ -5,6 +5,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pandas as pd
+from imblearn.over_sampling import SMOTE
 
 def reshape_data_for_lstm(X, timesteps=3):
     """Reshape data into 3D format required for LSTM: (samples, timesteps, features)"""
@@ -21,7 +22,7 @@ def train_lstm(X_train, y_train, X_test, y_test, X_val=None, y_val=None, **param
     """
     Train an LSTM model and return predictions and model details.
     """
-    # Extract parameters with defaults
+    # Extract parameters
     timesteps = params.get('timesteps', 3)
     units = params.get('units', 50)
     n_layers = params.get('layers', 1)
@@ -29,20 +30,24 @@ def train_lstm(X_train, y_train, X_test, y_test, X_val=None, y_val=None, **param
     epochs = params.get('epochs', 100)
     batch_size = params.get('batch_size', 32)
     
-    # Scale the features
+    # Scale features first
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    # Reshape data for LSTM
-    X_train_reshaped = reshape_data_for_lstm(X_train_scaled, timesteps)
+    # Apply SMOTE to scaled training data
+    sm = SMOTE(random_state=42, sampling_strategy=0.50)
+    X_train_sm, y_train_sm = sm.fit_resample(X_train_scaled, y_train)
+    
+    # Reshape SMOTE-enhanced data for LSTM
+    X_train_reshaped = reshape_data_for_lstm(X_train_sm, timesteps)
     X_test_reshaped = reshape_data_for_lstm(X_test_scaled, timesteps)
     
-    # Adjust target variables to match the reshaped data length
-    y_train_adjusted = y_train[timesteps-1:]
+    # Adjust target variables
+    y_train_adjusted = y_train_sm[timesteps-1:]
     y_test_adjusted = y_test[timesteps-1:]
     
-    # Prepare validation data if provided
+    # Prepare validation data
     validation_data = None
     if X_val is not None and y_val is not None:
         X_val_scaled = scaler.transform(X_val)
