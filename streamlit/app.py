@@ -26,6 +26,7 @@ from plotter import  plot_confusion_matrix, plot_feature_importances, plot_roc_c
 from model_functions.decision_tree import  auto_tune_decision_tree
 from model_functions.random_forest import auto_tune_random_forest
 from model_functions.gradient_boosting_classifier import auto_tune_gradient_boosting
+import joblib
 
 def main():
     # Set wide layout
@@ -1206,25 +1207,62 @@ def main():
                     # Store model results in session state
                     st.session_state['model_results'] = model_results
                     
-                    #saving the model performance metrics to the session state
+                    # After model training, store feature names
+                    st.session_state['model_results'] = model_results
                     st.session_state['model_metrics'] = metrics_df
                     st.session_state['val_metrics'] = val_metrics_df if model_results['val_metrics'] is not None else None
                     st.session_state['model_type'] = model_type
                     st.session_state['model_params'] = model_params
+                    st.session_state['feature_names'] = X_train.columns.tolist()  # Add this line
                     st.session_state['model_trained'] = True
                     st.session_state['initial_training_done'] = True
+
                     
                     st.success('Model training complete!')
-                    
+            
+            #two columns for save and load buttons
+            save_col, save_model_col = st.columns(2)
+            
+            with save_col:
             #save session keys as a json file using a save button
-            if st.button("Save Session Data", key="save_session_btn"):
-                with st.spinner("Saving session data..."):
-                    try:
-                        saved_path = save_session_data(st.session_state)
-                        st.success(f"Session data saved to {saved_path}")
-                    except Exception as e:
-                        st.error(f"Error saving session data: {str(e)}")
-        
+                if st.button("Save Session Data", key="save_session_btn"):
+                    with st.spinner("Saving session data..."):
+                        try:
+                            saved_path = save_session_data(st.session_state)
+                            st.success(f"Session data saved to {saved_path}")
+                        except Exception as e:
+                            st.error(f"Error saving session data: {str(e)}")
+            
+            with save_model_col:
+                if st.button("Save Model"):
+                    with st.spinner("Saving model..."):
+                        try:
+                            if 'model_results' not in st.session_state:
+                                st.error("No trained model found. Please train a model first.")
+                                return
+                            
+                            model_results = st.session_state['model_results']
+                            model_type = st.session_state.get('model_type', 'unknown')
+                            model_params = st.session_state.get('model_params', {})
+                            feature_names = st.session_state.get('feature_names', [])  # Get from session state
+                            
+                            save_path = save_trained_model(
+                                model_results,
+                                model_type,
+                                model_params,
+                                feature_names
+                            )
+                            st.success(f"Model saved to {save_path}")
+                            try:
+                                saved_path = save_session_data(st.session_state)
+                                st.success(f"Session data saved to {saved_path}")
+                            except Exception as e:
+                                st.error(f"Error saving session data: {str(e)}")
+                
+
+                        except Exception as e:
+                            st.error(f"Error saving model: {str(e)}")
+                        
         with model_tab:
             # Model information section
             st.markdown("### Available Models")
@@ -1364,8 +1402,320 @@ def main():
                         
                         **Best For**: Large datasets with temporal patterns
                     """)
-
+                    
+                    
+            
+        st.write("\n\n")
+        st.write("--------------------------------")
         
+        
+        # Section 6: Model Prediction
+        st.subheader("6. Model Prediction")
+
+        #adding two tabs for prediction and model performance
+        prediction_tab, model_performance_tab = st.tabs(["Prediction", "Model Performance"])
+
+        with prediction_tab:
+            # Get the list of saved models
+            saved_models = get_saved_models()
+
+            # Use a selectbox to choose the model to load
+            model_to_load = st.selectbox("Select Model to Load", saved_models)
+
+            # Load the model
+            if st.button("Load Model", key="load_model_btn"):
+                with st.spinner("Loading model..."):
+                    try:
+                        loaded_model = load_trained_model(model_to_load)
+                        st.session_state['loaded_model'] = loaded_model
+                        st.success(f"Model loaded successfully!")
+                    except Exception as e:
+                        st.error(f"Error loading model: {str(e)}")
+
+            # Update prediction interface in app
+            if 'loaded_model' in st.session_state:
+                # Use the transformed DataFrame from the session state
+                transformed_df = st.session_state['transformed_df']
+
+                # Extend the time series data using Monte Carlo simulation
+                test_df = create_test_df(transformed_df)
+
+                st.write("### Extended Time Series Data:")
+
+                # Last 10 rows of the extended dataframe
+                st.dataframe(test_df.tail(10))
+
+                # Remove non-feature columns for prediction
+                prediction_input = test_df.drop(columns=['Y'], errors='ignore')
+
+                try:
+                    results = make_predictions(st.session_state['loaded_model']['model'], prediction_input, test_df)
+
+                    # Display results
+                    st.write("### Predictions and Recommendations")
+                    st.dataframe(results)
+                    
+                    # Information Section (Disclaimer and Explanation)
+                    st.write("## 📘 Information and Disclaimer")
+                    st.info(
+                        """
+                        **Disclaimer:**
+                        - The data used for predictions is **synthetically generated** using a Monte Carlo simulation. It is not real market data.
+                        - The predictions and recommendations provided are based on a machine learning model and should not be considered as financial advice.
+                        - This tool is designed to help you **train your model, mitigate crash risks**, and **avoid potential losses** by making informed decisions in case of a market crash.
+                        - Always conduct your own research or consult a financial advisor before making any investment decisions.
+
+                        **AI-Powered Chatbot:**
+                        - You can also use our **AI-powered chatbot** to help with **market research, understanding stock trends**, and getting answers to your questions about **investment strategies and market conditions**.
+
+                        **Explanation of Metrics:**
+                        - **Prediction**: The model predicts whether a market crash (1) or no crash (0) is likely to occur.
+                        - **Recommendation**: Based on the prediction and confidence score, the model suggests whether to **Buy**, **Sell**, or **Hold**.
+                        - **Confidence Score**: The model's confidence in its prediction. A higher confidence score indicates greater certainty.
+                        - **Potential Return (%)**: The estimated return from following the recommendation. Assumed returns:
+                            - **Buy**: +5% return if the market does not crash.
+                            - **Sell**: +2% return if the market crashes.
+                            - **Hold**: -1% return if the recommendation is incorrect or uncertain.
+                        - **Cumulative Return (%)**: The total return accumulated over time by following the model’s recommendations. This metric helps track how an investment strategy would perform if followed consistently.
+                        """
+                    )
+
+                    
+                    # Plot cumulative return over time
+                    fig, ax = plt.subplots()
+                    ax.plot(results['Data'], results['Cumulative Return (%)'])
+                    ax.set_title('Cumulative Return Over Time')
+                    ax.set_xlabel('Data')
+                    ax.set_ylabel('Cumulative Return (%)')
+                    st.pyplot(fig)
+
+                    
+                    # Add save predictions button
+                    if st.button("Save Predictions"):
+                        try:
+                            # Create predictions directory if it doesn't exist
+                            os.makedirs('predictions', exist_ok=True)
+                            
+                            # Create filename with timestamp
+                            output_filename = f"predictions/pred_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            
+                            # Save predictions
+                            results.to_csv(output_filename, index=False)
+                            st.success(f"Predictions saved to {output_filename}")
+                        except Exception as e:
+                            st.error(f"Error saving predictions: {str(e)}")
+                            
+                except Exception as e:
+                    st.error(f"Error making predictions: {str(e)}")
+                    
+        with model_performance_tab:
+            saved_models_data = get_models_with_metadata()
+
+            if not saved_models_data:
+                st.warning("No saved models found.")
+            else:
+                model_names = list(saved_models_data.keys())
+                selected_model = st.selectbox(
+                    "Select Model to View Performance",
+                    model_names,
+                    key="model_performance_select"
+                )
+
+                if selected_model:
+                    metadata = saved_models_data[selected_model].get('metadata', {})
+
+                    # Model Overview
+                    st.markdown("### Model Overview")
+                    col1, col2 = st.columns(2)
+
+                    # Safely extract model type and training date
+                    model_type = metadata.get('model_performance', {}).get('model_type', 'N/A')
+                    training_date = metadata.get('metadata', {}).get('timestamp', 'N/A')
+
+                    with col1:
+                        st.write("**Model Type:**", model_type)
+                        st.write("**Training Date:**", training_date)
+
+                    # Safely extract features used and framework
+                    feature_names = metadata.get('saved_keys', {}).get('feature_names', {}).get('value', [])
+                    framework = metadata.get('model_performance', {}).get('model_params', {}).get('framework', 'N/A')
+
+                    with col2:
+                        st.write("**Features Used:**", len(feature_names) if feature_names else "N/A")
+                        st.write("**Framework:**", framework)
+
+                    # Model Parameters
+                    with st.expander("Model Parameters"):
+                        model_params = metadata.get('model_performance', {}).get('model_params', {})
+                        st.json(model_params if model_params else {"message": "No parameters available"})
+
+                    # Performance Metrics
+                    with st.expander("Performance Metrics"):
+                        test_metrics = metadata.get('model_performance', {}).get('test_metrics', {})
+                        if test_metrics:
+                            st.markdown("#### Test Set Metrics")
+                            metrics_df = pd.DataFrame({
+                                'Metric': list(test_metrics.keys()),
+                                'Value': list(test_metrics.values())
+                            })
+                            st.dataframe(metrics_df)
+                        else:
+                            st.write("No test metrics available.")
+
+                    # Feature Information
+                    with st.expander("Feature Information"):
+                        selected_features = metadata.get('saved_keys', {}).get('selected_features', {}).get('value', [])
+                        st.markdown("#### Selected Features")
+                        st.write(selected_features if selected_features else "No features selected.")
+
+                        st.markdown("#### Feature Correlations")
+                        try:
+                            corr_str = metadata.get('saved_keys', {}).get('correlations', {}).get('value', "")
+                            correlations = pd.Series({
+                                k: float(v) for k, v in [
+                                    line.split() for line in corr_str.split('\n') if line
+                                ]
+                            })
+                            st.dataframe(correlations.sort_values(ascending=False))
+                        except Exception as e:
+                            st.error(f"Error displaying correlations: {str(e)}")
+
+
+
+# Function to predict crash or no crash with confidence scores and propose an investment strategy
+def make_predictions(model, input_df, copy_df, buy_threshold=0.7, sell_threshold=0.7):
+
+    # Drop 'Data' column for prediction
+    features = input_df.drop(columns=['Data'], errors='ignore')
+
+    # Make predictions
+    predictions = model.predict(features)
+
+    # Get confidence scores using predict_proba
+    if hasattr(model, 'predict_proba'):
+        prob_scores = model.predict_proba(features)
+        confidence_scores = prob_scores.max(axis=1)  # Get the max probability for each prediction
+    else:
+        confidence_scores = [None] * len(predictions)  # Handle models without predict_proba
+
+    # Use the copy DataFrame to add predictions and recommendations
+    copy_df['Prediction'] = predictions
+    copy_df['Confidence Score'] = confidence_scores
+
+    # Propose investment recommendations based on confidence thresholds
+    recommendations = []
+    returns = []
+
+    for pred, conf in zip(predictions, confidence_scores):
+        if pred == 0 and conf >= buy_threshold:
+            recommendations.append("Buy")
+            returns.append(5)  # Assume 5% return for correct Buy decision
+        elif pred == 1 and conf >= sell_threshold:
+            recommendations.append("Sell")
+            returns.append(2)  # Assume 2% return for correct Sell decision
+        else:
+            recommendations.append("Hold")
+            returns.append(-1)  # Assume -1% loss for incorrect decision
+
+    # Add recommendations and returns to the DataFrame
+    copy_df['Recommendation'] = recommendations
+    copy_df['Potential Return (%)'] = returns
+
+    # Calculate cumulative returns over time
+    copy_df['Cumulative Return (%)'] = copy_df['Potential Return (%)'].cumsum()
+
+    # Return the enhanced DataFrame
+    return copy_df[['Data', 'Prediction', 'Confidence Score', 'Recommendation', 'Potential Return (%)', 'Cumulative Return (%)']]
+
+
+
+# Function to load a trained model
+def load_trained_model(model_path):
+    """Load a trained model and metadata from disk."""
+    try:
+        # Construct full path to model file
+        full_path = os.path.join('models', model_path, 'model.joblib')
+
+        # Check if file exists
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Model file not found at: {full_path}")
+
+        # Load model data using joblib
+        model_data = joblib.load(full_path)
+        return model_data
+
+    except Exception as e:
+        raise Exception(f"Error loading model from {full_path}: {str(e)}")
+
+
+# Function to create a new time series test DataFrame using Monte Carlo Simulation
+def create_test_df(dataframe, start_date="2021-01-01", end_date="2025-12-31"):
+    """
+    Create a new time series test DataFrame using Monte Carlo simulation for the given date range.
+    """
+    # Convert 'Data' column to datetime
+    dataframe['Data'] = pd.to_datetime(dataframe['Data'])
+
+    # Generate future dates for the test DataFrame
+    future_dates = pd.date_range(start=start_date, end=end_date, freq='W')
+
+    # Initialize a new DataFrame for test data
+    test_df = pd.DataFrame({'Data': future_dates})
+
+    # For each feature, simulate future values using random walk
+    for col in dataframe.columns:
+        if col not in ['Data', 'Y']:  # Skip target column and date column
+            historical_values = dataframe[col].values
+            simulated_values = np.random.normal(
+                loc=np.mean(historical_values),
+                scale=np.std(historical_values),
+                size=len(future_dates)
+            )
+            # Add simulated values to the test DataFrame
+            test_df[col] = simulated_values
+
+    # Fill any missing values using forward fill
+    test_df.fillna(method='ffill', inplace=True)
+
+    return test_df
+
+
+def save_trained_model(model_results, model_type, model_params, feature_names):
+    
+    if not model_results or not model_type:
+        raise ValueError("Missing required model data")
+        
+    # Create models directory if it doesn't exist
+    os.makedirs('models', exist_ok=True)
+    
+    # Create a save path with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    model_dir = f'models/{model_type}_{timestamp}'
+    os.makedirs(model_dir, exist_ok=True)
+    
+    # Save model and metadata
+    model_data = {
+        'model': model_results['model'],
+        'feature_names': feature_names,
+        'model_type': model_type,
+        'model_params': model_params,
+        'metrics': {
+            'test_metrics': model_results['test_metrics'],
+            'val_metrics': model_results['val_metrics']
+        }
+    }
+    
+    joblib.dump(model_data, f'{model_dir}/model.joblib')
+    return model_dir
+
+#get available models from the models directory
+def get_saved_models():
+    models = []
+    for root, dirs, files in os.walk('models'):
+        for dir in dirs:
+            if os.path.exists(f'{root}/{dir}/model.joblib'):
+                models.append(dir)
+    return models
         
 
 def train_and_evaluate_decision_tree(X_train, y_train, X_test, y_test, X_val, y_val, model_params):
@@ -1616,6 +1966,48 @@ def save_session_data(session_state, base_dir='./saved_models'):
         json.dump(session_data, f, indent=2)
         
     return json_path
+
+def get_models_with_metadata():
+    """Get all saved models with their metadata."""
+    models_data = {}
+    
+    try:
+        saved_models_path = './saved_models'
+        if not os.path.exists(saved_models_path):
+            print(f"Directory not found: {saved_models_path}")
+            return {}
+            
+        # List model directories
+        model_dirs = [d for d in os.listdir(saved_models_path) if os.path.isdir(os.path.join(saved_models_path, d))]
+        
+        for dir_name in model_dirs:
+            model_dir = os.path.join(saved_models_path, dir_name)
+            
+            # Look for session_metadata file directly in model directory
+            metadata_files = [f for f in os.listdir(model_dir) if 'session_metadata' in f and f.endswith('.json')]
+            
+            if metadata_files:
+                metadata_path = os.path.join(model_dir, metadata_files[0])
+                try:
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                        
+                    models_data[dir_name] = {
+                        'metadata': metadata,
+                        'path': model_dir,
+                        'timestamp': metadata['metadata'].get('timestamp', 'N/A')
+                    }
+                except Exception as e:
+                    print(f"Error reading metadata for {dir_name}: {str(e)}")
+                    continue
+                    
+        return models_data
+        
+    except Exception as e:
+        print(f"Error accessing saved models: {str(e)}")
+        return {}
+
+
 
 if __name__ == "__main__":
     main()

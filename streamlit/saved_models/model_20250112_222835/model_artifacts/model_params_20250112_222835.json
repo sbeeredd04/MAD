@@ -1,0 +1,4 @@
+{
+  "auto_tune": true,
+  "framework": "sklearn"
+}

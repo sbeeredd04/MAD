@@ -18,7 +18,7 @@ The Market Anomaly Detection (MAD) project involves building an anomaly detectio
 - **[DONE]Detailed Model Training and Testing**: Review model training and testing processes in detail using Jupyter Notebook files.
 - **[DONE]Auto Tune Feature for Gradient Boosting**: Implementing auto tuning for gradient boosting models.
 - **Unsupervised models**: Add unsupervised models and their respective auto tuning parameters along with testing. 
-- **Detection Test**: Simulation data and suggesting buy or sell for investement data based on simulated dataset. 
+- **[DONE]Detection Test**: Simulation data and suggesting buy or sell for investement data based on simulated dataset. 
 - **Validation tuning**: Add validation tuning for auto tuning on validation set.
 - **SMOTE option**: Adding smote option with a sampling strategy for all models
 - **Auto-Tune Parameters**: Add parameters for auto tune to give different parts weightage on scores.
