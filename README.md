@@ -9,6 +9,7 @@ The Market Anomaly Detection (MAD) project involves building an anomaly detectio
 - **Model Training**: Users can train decision trees, random forests, and gradient boosting models.
 - **Model Evaluation**: The application provides metrics for model performance, including accuracy, precision, recall, and ROC AUC.
 - **Visualization**: Confusion matrices and ROC curves are generated for model evaluation.
+- **ChatBot**: AI chatbot powered by GEMINI.
 
 ## Upcoming Features
 - **[DONE]Correlation Filter**: Implement a correlation filter to select relevant features before applying feature engineering.
