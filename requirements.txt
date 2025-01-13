@@ -106,6 +106,10 @@ pyparsing==3.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 pytz==2024.2
+<<<<<<< HEAD
+=======
+pywin32==308
+>>>>>>> 17658b2f1135b345bcdbfeaeba5f2efd4264388c
 pyzmq==26.2.0
 referencing==0.35.1
 requests==2.32.3
